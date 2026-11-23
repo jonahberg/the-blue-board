@@ -44,7 +44,16 @@ function resetHubState() {
   hubState.faaUnknownSince = null;
   hubState.iropsScore = null;
   hubState.briefTone = null;
-  hubState.iropsData = null;
+  // The server's own readings behind the two chips (83% and 71%, 300 departed, a 5-minute-old
+  // board): since Nov 22 2026 the network chip reads these gated readings (hub-health.js
+  // networkInputs), never the chips' own figures.
+  const builtSec = Math.floor((now - 5 * 60_000) / 1000);
+  hubState.iropsData = {
+    hubMetrics: {
+      ORD: { total: 640, operated: 300, onTime: 249, generatedAt: builtSec },
+      DEN: { total: 480, operated: 300, onTime: 213, generatedAt: builtSec },
+    },
+  };
 }
 // A hub chip is followed in place (useFollowDeepLink), which selects the board through the
 // Schedule store's setCurrent.
@@ -243,6 +252,32 @@ describe('HubHealthStrip', () => {
 
   it('labels the network chip from the on-time readings alone when nothing else is wrong', () => {
     renderStrip();
+    expect(screen.getByText('Smooth Ops')).toBeTruthy();
+  });
+
+  it('takes the network level from the server’s gated readings, never a visitor’s own boards (Nov 22 2026)', () => {
+    // The chips still show their figures; with no /api/irops answer there is no network level to show.
+    hubState.iropsData = null;
+    renderStrip();
+    expect(screen.getByRole('link', { name: /ORD/ }).textContent).toContain('83%');
+    expect(screen.queryByText('Smooth Ops')).toBeNull();
+    expect(screen.queryByText('Some Delays')).toBeNull();
+  });
+
+  it('a thin early reading on a hub chip does not make the network "Some Delays"', () => {
+    // Newark's first 18 departures at 61% and Dulles's 20 at 65%: each chip shows its figure, but the
+    // network level waits for 25 departed, as the brief does.
+    const builtSec = Math.floor((Date.now() - 5 * 60_000) / 1000);
+    hubState.hubs = [...hubState.hubs, { hub: 'EWR', otp: 61, source: 'server', asOfMs: Date.now() }, { hub: 'IAD', otp: 65, source: 'server', asOfMs: Date.now() }];
+    hubState.iropsData = {
+      hubMetrics: {
+        ...hubState.iropsData!.hubMetrics,
+        EWR: { total: 380, operated: 18, onTime: 11, generatedAt: builtSec },
+        IAD: { total: 240, operated: 20, onTime: 13, generatedAt: builtSec },
+      },
+    };
+    renderStrip();
+    expect(screen.getByRole('link', { name: /EWR/ }).textContent).toContain('61%');
     expect(screen.getByText('Smooth Ops')).toBeTruthy();
   });
 

@@ -219,7 +219,9 @@ describe('verifyBrief: headline, tone, traveler note', () => {
       const out = verifyBrief(brief(items, { headline }), watchFacts);
       expect(out.brief.tone, headline).toBe('watch');
       expect(out.report.headline, headline).toEqual({ status: 'replaced', reasons: ['headline:calm_when_not_calm'], original: headline });
-      expect(out.brief.headline).toBe('FAA action is possible at Newark; none is in effect.');
+      // The hand-built list keeps a watch floor on a possible program (built facts no longer carry
+      // one, Nov 22 2026); with no impaired hub the template's watch line names no airport.
+      expect(out.brief.headline).toBe("Delays are up across United's network right now.");
     }
     // Calm words in a calm brief, and words that merely contain them, are fine.
     expect(verifyBrief(brief(items, { headline: 'United operations look calm.' }), FACTS.filter((f) => f.toneFloor === 'calm')).report.headline.status).toBe('kept');
@@ -366,9 +368,17 @@ describe('verifyBrief: Nov 12 2026 rules', () => {
     });
   });
 
+  // ord-79-variant on a watch day. Since Nov 22 2026 the index at 20.3 alone is calm, so O'Hare is at
+  // 66% today (impaired) beside the index at 31: one impaired hub and the index at 30 or more.
+  const ordWatch = () => {
+    const fx = fixture('ord-79-variant');
+    const hubMetrics = { ...fx.sources.irops.hubMetrics, ORD: { ...fx.sources.irops.hubMetrics.ORD, onTime: Math.round(fx.sources.irops.hubMetrics.ORD.operated * 0.66) } };
+    return buildBriefFacts({ ...fx.sources, irops: { ...fx.sources.irops, score: 31, hubMetrics } }, { nowMs: Date.parse(fx.nowIso) }).facts;
+  };
+
   it('a watch headline may say the OTHER hubs are running normally once it has named the problem (the 5:20 PM shape)', () => {
-    const ord = factsOf('ord-79-variant');
-    const lead = item("Chicago O'Hare is the lowest hub, at 79% on time so far today (460 departed).", ['otp.ORD']);
+    const ord = ordWatch();
+    const lead = item("Chicago O'Hare is the lowest hub, at 66% on time so far today (460 departed).", ['otp.ORD']);
     for (const headline of ["Chicago O'Hare is running behind; the other hubs are running normally.", 'Chicago O\'Hare lags; the remaining United hubs look normal.']) {
       expect(verifyBrief(brief([lead], { tone: 'watch', headline }), ord).report.headline.status, headline).toBe('kept');
     }
@@ -521,8 +531,12 @@ describe('verifyBrief: Nov 12 2026, round 2', () => {
   });
 
   it('the calm-headline guard catches "run normally" and "hubs are steady / fine / normal" on a watch day', () => {
-    const ord = factsOf('ord-79-variant'); // watch (the index)
-    const lead = item("Chicago O'Hare is the lowest hub, at 79% on time so far today (460 departed).", ['otp.ORD']);
+    // ord-79-variant on a watch day: O'Hare at 66% today beside the index at 31 (since Nov 22 2026
+    // the index at 20.3 alone is calm).
+    const fx = fixture('ord-79-variant');
+    const hubMetrics = { ...fx.sources.irops.hubMetrics, ORD: { ...fx.sources.irops.hubMetrics.ORD, onTime: Math.round(fx.sources.irops.hubMetrics.ORD.operated * 0.66) } };
+    const ord = buildBriefFacts({ ...fx.sources, irops: { ...fx.sources.irops, score: 31, hubMetrics } }, { nowMs: Date.parse(fx.nowIso) }).facts;
+    const lead = item("Chicago O'Hare is the lowest hub, at 66% on time so far today (460 departed).", ['otp.ORD']);
     for (const headline of ['Hubs run normally; Seattle has a delay program.', 'Hubs are steady; possible ground delay programs at Newark and San Francisco.', "United's hubs are normal tonight.", 'The hubs look fine this evening.', 'Hubs are running normally.']) {
       expect(verifyBrief(brief([lead], { tone: 'watch', headline }), ord).report.headline.reasons, headline).toContain('headline:calm_when_not_calm');
     }

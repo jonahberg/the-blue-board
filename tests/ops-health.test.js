@@ -62,8 +62,9 @@ describe('deriveOpsHealth', () => {
   });
 
   it('a GDP at a UA hub is advisory with the avg delay, worded as the header pill ("Some Delays") and the right way round', () => {
+    // Nov 22 2026: one hub's program is not network-wide; a second impaired hub makes it so.
     const opts = {
-      hubOtps: {},
+      hubOtps: { EWR: 66 },
       faaIndex: { SFO: { delays: [{ type: 'ground_delay', avgDelay: 72 }] } },
       hubCodes: HUBS,
       iropsScore: null,
@@ -72,6 +73,12 @@ describe('deriveOpsHealth', () => {
     expect(h.level).toBe('advisory');
     expect(networkStatus(opts).label).toBe('Some Delays');
     expect(h.text).toBe('Some delays: ground delay program for flights into SFO (avg 72 min)');
+  });
+
+  it('one GDP alone is not an advisory (Nov 22 2026): the network is Smooth Ops and the note names the program', () => {
+    const opts = { hubOtps: { ORD: 90 }, faaIndex: { SFO: { delays: [{ type: 'ground_delay', avgDelay: 72 }] } }, hubCodes: HUBS, iropsScore: 22 };
+    expect(networkStatus(opts).label).toBe('Smooth Ops');
+    expect(deriveOpsHealth(opts)).toEqual({ level: 'normal', text: '', note: 'Ground delay program for flights into SFO (avg 72 min)' });
   });
 
   it('a GDP says "Disrupted:" only when the network level is (the level logic is unchanged)', () => {
@@ -83,8 +90,9 @@ describe('deriveOpsHealth', () => {
   it('a stop or delay program listed only under programs[] is worded the same way', () => {
     const gs = deriveOpsHealth({ hubOtps: { ORD: 90 }, faaIndex: { EWR: { programs: [{ type: 'ground_stop' }] } }, hubCodes: HUBS, iropsScore: 2 });
     expect(gs.text).toBe('Disrupted: ground stop for flights into EWR');
-    const gdp = deriveOpsHealth({ hubOtps: { ORD: 90 }, faaIndex: { SFO: { programs: [{ type: 'ground_delay' }] } }, hubCodes: HUBS, iropsScore: 2 });
-    expect(gdp.text).toBe('Some delays: ground delay program for flights into SFO');
+    // A second hub's program makes the network "Some Delays" (Nov 22 2026).
+    const gdp = deriveOpsHealth({ hubOtps: { ORD: 90 }, faaIndex: { SFO: { programs: [{ type: 'ground_delay' }] }, IAH: { programs: [{ type: 'ground_delay' }] } }, hubCodes: HUBS, iropsScore: 2 });
+    expect(gdp.text).toBe('Some delays: ground delay program for flights into IAH');
   });
 
   it('never reports normal when the IROPS index is red (>= 40)', () => {
@@ -105,11 +113,11 @@ describe('deriveOpsHealth', () => {
     expect(h.text).toContain('ground stop');
   });
 
-  it('does not say "all systems normal" while the IROPS panel says MINOR DISRUPTION', () => {
-    // v1.12.0: MINOR is 20–40 (was 5–15), so the old 8.4 fixture is now NORMAL — 28.4 is minor.
-    const h = deriveOpsHealth({ hubOtps: { ORD: 88 }, faaIndex: {}, hubCodes: HUBS, iropsScore: 28.4 });
-    expect(h.level).toBe('advisory');
-    expect(h.text).toBe('Minor irregular ops — IROPS 28.4/100');
+  it('the IROPS index in its minor band alone is not an advisory (Nov 22 2026); beside an impaired hub at 30+ it is', () => {
+    // The index sits at 20–40 most ordinary evenings; the IROPS card still labels it MINOR on its own scale.
+    expect(deriveOpsHealth({ hubOtps: { ORD: 88 }, faaIndex: {}, hubCodes: HUBS, iropsScore: 28.4 })).toEqual({ level: 'normal', text: '' });
+    const h = deriveOpsHealth({ hubOtps: { ORD: 88, IAH: 64 }, faaIndex: {}, hubCodes: HUBS, iropsScore: 31.2 });
+    expect(h).toEqual({ level: 'advisory', text: 'Some delays: IAH on-time 64% — IROPS 31.2/100' });
   });
 
   it('a calm night (IROPS 18, every hub green, no programs) reads normal (v1.12.0)', () => {
@@ -125,11 +133,15 @@ describe('deriveOpsHealth', () => {
     expect(h.text).toBe('Some delays — hub on-time averaging 64%');
   });
 
-  it('names a closure or departure-delay program the strip chip is flagging', () => {
+  it('names a closure the strip chip is flagging, and departure delays when they are long and network-wide', () => {
     expect(deriveOpsHealth({ faaIndex: { SFO: { closure: true } }, hubCodes: HUBS, iropsScore: 30 }).text)
       .toBe('Disrupted: Airport closure at SFO');
-    expect(deriveOpsHealth({ faaIndex: { EWR: { departureDelay: true } }, hubCodes: HUBS, iropsScore: 1 }).text)
-      .toBe('Departure delays at EWR');
+    // Nov 22 2026: a bare departure-delay flag (no lower bound) never impairs a hub; delays from 45
+    // minutes at two hubs are "Some Delays".
+    expect(deriveOpsHealth({ faaIndex: { EWR: { departureDelay: true } }, hubCodes: HUBS, iropsScore: 1 })).toEqual({ level: 'normal', text: '' });
+    const long = { programs: [{ type: 'departure_delay', minDelay: 46, maxDelay: 60 }] };
+    expect(deriveOpsHealth({ faaIndex: { EWR: long }, hubCodes: HUBS, iropsScore: 1 })).toEqual({ level: 'normal', text: '', note: 'Departure delays at EWR' });
+    expect(deriveOpsHealth({ faaIndex: { EWR: long, ORD: long }, hubCodes: HUBS, iropsScore: 1 }).text).toBe('Some delays at ORD and EWR');
   });
 
   it('degrades gracefully with no inputs at all (old cached payloads)', () => {
@@ -181,40 +193,47 @@ describe('hubProgramMarker (F046/F076: chip severity blends FAA programs)', () =
   });
 });
 
-describe('networkStatus — the one definition behind the strip chip, the ticker and the IROPS badge', () => {
+describe('networkStatus — the one definition behind the strip chip, the ticker and the brief', () => {
   it('is normal only when every signal is quiet', () => {
     expect(networkStatus({ hubOtps: { ORD: 90, DEN: 85 }, hubCodes: HUBS, iropsScore: 2 }).level).toBe('normal');
   });
 
-  it('tracks the IROPS panel band exactly: NORMAL / MINOR / SIGNIFICANT', () => {
+  it('reads the IROPS index at its significant line only; the minor band alone is not "Some Delays" (Nov 22 2026)', () => {
+    // The IROPS card keeps its own NORMAL / MINOR / SIGNIFICANT label for the index; the network
+    // level no longer tracks MINOR, which an ordinary evening sits in.
     for (const score of [0, 4.9, 15, 19.9, 20, 39.9, 40, 56.7]) {
       const status = networkStatus({ hubOtps: { ORD: 95 }, hubCodes: HUBS, iropsScore: score });
-      const expected = { low: 'normal', med: 'minor', high: 'significant' }[iropsScoreCls(score)];
+      const expected = iropsScoreCls(score) === 'high' ? 'significant' : 'normal';
       expect(status.level, `score ${score} (${iropsScoreLabel(score)})`).toBe(expected);
     }
   });
 
-  it('takes the worst of on-time, FAA programs and IROPS', () => {
+  it('takes the worst of on-time, FAA programs and IROPS; "Some Delays" needs breadth', () => {
     const base = { hubCodes: HUBS, iropsScore: 2 };
     expect(networkStatus({ ...base, hubOtps: { ORD: 90, DEN: 45 } }).level).toBe('significant');
     expect(networkStatus({ ...base, hubOtps: { ORD: 90 }, faaIndex: { EWR: { groundStop: true } } }).level).toBe('significant');
     expect(networkStatus({ ...base, hubOtps: { ORD: 90 }, faaIndex: { SFO: { closure: true } } }).level).toBe('significant');
-    expect(networkStatus({ ...base, hubOtps: { ORD: 90 }, faaIndex: { SFO: { groundDelay: true } } }).level).toBe('minor');
+    // One hub's delay program: named, not "Some Delays" (Nov 22 2026); two hubs' programs are.
+    expect(networkStatus({ ...base, hubOtps: { ORD: 90 }, faaIndex: { SFO: { groundDelay: true } } }).level).toBe('normal');
+    expect(networkStatus({ ...base, hubOtps: { ORD: 90 }, faaIndex: { SFO: { groundDelay: true }, EWR: { groundDelay: true } } }).level).toBe('minor');
+    // The average at 70% or less is unchanged.
     expect(networkStatus({ ...base, hubOtps: { ORD: 65, DEN: 72 } }).level).toBe('minor');
   });
 
   it('maps each level to one severity, colour and label', () => {
     expect(networkStatus({ hubOtps: { ORD: 90 }, hubCodes: HUBS })).toMatchObject({ severity: 'green', label: 'Smooth Ops' });
-    expect(networkStatus({ hubOtps: { ORD: 90 }, hubCodes: HUBS, iropsScore: 25 })).toMatchObject({ severity: 'amber', label: 'Some Delays' });
+    expect(networkStatus({ hubOtps: { ORD: 90, EWR: 65 }, hubCodes: HUBS, iropsScore: 30 })).toMatchObject({ severity: 'amber', label: 'Some Delays' });
     expect(networkStatus({ hubOtps: { ORD: 90 }, hubCodes: HUBS, iropsScore: 40 })).toMatchObject({ severity: 'red', label: 'Disrupted' });
   });
 
-  it('band boundaries at 19.9 / 20 / 39.9 / 40 (v1.12.0)', () => {
-    const level = (iropsScore) => networkStatus({ hubOtps: { ORD: 90 }, hubCodes: HUBS, iropsScore }).level;
+  it('band boundaries: the significant line at 39.9 / 40 (v1.12.0); the one-hub line at 29.9 / 30 (Nov 22 2026)', () => {
+    const level = (iropsScore, hubOtps = { ORD: 90 }) => networkStatus({ hubOtps, hubCodes: HUBS, iropsScore }).level;
     expect(level(19.9)).toBe('normal');
-    expect(level(20)).toBe('minor');
-    expect(level(39.9)).toBe('minor');
+    expect(level(20)).toBe('normal');
+    expect(level(39.9)).toBe('normal');
     expect(level(40)).toBe('significant');
+    expect(level(29.9, { ORD: 90, EWR: 65 })).toBe('normal');
+    expect(level(30, { ORD: 90, EWR: 65 })).toBe('minor');
   });
 
   it('the re-based bands never weaken the FAA and on-time escalations', () => {
@@ -225,9 +244,9 @@ describe('networkStatus — the one definition behind the strip chip, the ticker
       .toBe('significant');
     expect(deriveOpsHealth({ hubOtps: { ORD: 92 }, faaIndex: { EWR: { groundStop: true } }, hubCodes: HUBS, iropsScore: 10 }).text)
       .toBe('Disrupted: ground stop for flights into EWR');
-    // …and so is any hub under 50% on-time, and a GDP is at least minor.
+    // …and so is any hub under 50% on-time; a GDP is minor beside the index at 30 (Nov 22 2026).
     expect(networkStatus({ hubOtps: { ORD: 92, IAH: 49 }, hubCodes: HUBS, iropsScore: 10 }).level).toBe('significant');
-    expect(networkStatus({ hubOtps: { ORD: 92 }, faaIndex: { SFO: { groundDelay: true } }, hubCodes: HUBS, iropsScore: 10 }).level)
+    expect(networkStatus({ hubOtps: { ORD: 92 }, faaIndex: { SFO: { groundDelay: true } }, hubCodes: HUBS, iropsScore: 30 }).level)
       .toBe('minor');
   });
 

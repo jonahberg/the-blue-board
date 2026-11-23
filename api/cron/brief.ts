@@ -9,9 +9,11 @@
 //   2. Publishes nothing unless BOTH /api/irops and /api/faa answered and at least three hubs carry
 //      an on-time reading: a calm brief written without the FAA picture, or without on-time
 //      evidence, would be a lie.
-//   3. Hashes the material facts (jitter-rounded). Same hash as the latest brief, and that brief is
-//      under 60 minutes old → no new brief; the run only stamps `checked_at` so the read endpoint can
-//      tell "re-confirmed" from "stale".
+//   3. Hashes the material facts (jitter-rounded). Same hash as the latest brief, that brief under
+//      60 minutes old and its stored tone still the tone these facts compute → no new brief; the run
+//      only stamps `checked_at` so the read endpoint can tell "re-confirmed" from "stale". (A tone
+//      that no longer matches only happens when the tone rule itself changed, as on Nov 22 2026, when
+//      one hub's trouble stopped being a watch: the brief is rewritten then, not up to an hour later.)
 //   4. Otherwise asks the model (api/_brief-model.ts), after the brief's own daily spend cap
 //      (feature_spend_daily, BRIEF_DAILY_USD_CAP, default $0.50) says it may.
 //   5. Verifies the model's brief against the facts (src/lib/brief-verify.js). Invalid JSON, a failed
@@ -34,7 +36,7 @@ import { collectBriefSources, type CollectedSources } from '../_brief-collect.js
 import { cleanupOldBriefs, insertBrief, loadLatestBrief, touchBriefChecked, type BriefRow, type LatestBriefMeta } from '../_brief-store.js';
 import { getFeatureSpendForDay, readUsdCap, recordFeatureSpend, utcDay } from '../_feature-spend.js';
 import { generateBriefWithModel, type BriefModelResult } from '../_brief-model.js';
-import { BRIEF_MIN_HUB_READINGS, buildBriefFacts, hubReadingCount, materialKey } from '../../src/lib/brief-facts.js';
+import { BRIEF_MIN_HUB_READINGS, buildBriefFacts, computeTone, hubReadingCount, materialKey } from '../../src/lib/brief-facts.js';
 import { buildTemplateBrief } from '../../src/lib/brief-template.js';
 import { verifyBrief } from '../../src/lib/brief-verify.js';
 import { briefWorstCaseCostUsd, buildBriefRequest } from '../../src/lib/brief-prompt.js';
@@ -125,7 +127,7 @@ export async function runBriefCron(deps: BriefCronDeps = {}): Promise<BriefCronS
   if (extra.report !== undefined) collectionReport.radio = extra.report;
   const hash = factsHash(facts);
 
-  const latest = await loadLatestBrief<LatestBriefMeta>('id, generated_at, checked_at, facts_hash, source, template_reason');
+  const latest = await loadLatestBrief<LatestBriefMeta>('id, generated_at, checked_at, facts_hash, source, template_reason, tone');
   if (!latest.ok) return { status: latest.reason === 'table missing' ? 'unconfigured' : 'error', reason: latest.reason };
 
   const prev = latest.value;
@@ -133,7 +135,10 @@ export async function runBriefCron(deps: BriefCronDeps = {}): Promise<BriefCronS
     const ageMs = nowMs - Date.parse(prev.generated_at);
     const retryTransient = prev.source === 'template' && TRANSIENT_FAILURES.has(String(prev.template_reason))
       && briefGenerationEnabled() && Boolean(process.env.AI_GATEWAY_API_KEY);
-    if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs < BRIEF_REUSE_MAX_AGE_MS && !retryTransient) {
+    // The tone is a function of the material facts, so it differs on the same hash only after the
+    // tone rule changed in a deploy: then the stored brief is not reused (step 3 above).
+    const toneStale = typeof prev.tone === 'string' && prev.tone !== computeTone(facts);
+    if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs < BRIEF_REUSE_MAX_AGE_MS && !retryTransient && !toneStale) {
       const touched = typeof prev.id === 'number' ? await touchBriefChecked(prev.id, new Date(nowMs).toISOString()) : false;
       return { status: 'unchanged', briefId: prev.id ?? null, ageMin: Math.round(ageMs / 60000), checkedAtUpdated: touched, factCount: facts.length };
     }

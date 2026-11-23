@@ -1,6 +1,6 @@
 {
  "name": "ord-80-specimen",
- "description": "The production brief of Nov 11 2026, 5:20 PM PT (01:20Z Nov 12) that the owner liked: Chicago O'Hare at 80% (460 departed), the other hubs 89–95%, the disruption index 20.3 (minor: the network status reads \"Some Delays\"), the Seattle ground delay program (not a hub) until 9:59 PM PT, 1 confirmed cancellation, and the Nov 12 plan's possible programs at Newark and San Francisco tomorrow morning. 80% is the healthy line (BRIEF_HEALTHY_HUB_OTP, at or above), so every hub is healthy and Chicago O'Hare's own figure is not sent. Expected tone: watch, from the index and the possible hub programs.",
+ "description": "The production brief of Nov 11 2026, 5:20 PM PT (01:20Z Nov 12) that the owner liked: Chicago O'Hare at 80% (460 departed), the other hubs 89–95%, the disruption index 20.3 (minor band; the network status read \"Some Delays\" until Nov 22 2026 and reads \"Smooth Ops\" now), the Seattle ground delay program (not a hub) until 9:59 PM PT, 1 confirmed cancellation, and the Nov 12 plan's possible programs at Newark and San Francisco tomorrow morning. 80% is the healthy line (BRIEF_HEALTHY_HUB_OTP, at or above), so every hub is healthy and Chicago O'Hare's own figure is not sent. Expected tone: calm since Nov 22 2026 (it was watch, from the index in its minor band, which never sets the tone alone now).",
  "nowIso": "2026-11-12T01:20:00Z",
  "sources": {
   "irops": {
@@ -761,6 +761,6 @@
   }
  },
  "expect": {
-  "tone": "watch"
+  "tone": "calm"
  }
 }
