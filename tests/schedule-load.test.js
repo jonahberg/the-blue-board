@@ -1,11 +1,15 @@
 import { describe, it, expect } from 'vitest';
 
+import { HUB_ORDER } from '../src/lib/hub-health.js';
 import {
   AGE_CHIP_THRESHOLD_SECONDS,
+  AGG_CACHE_MAX_BOARDS,
   MAX_SCHEDULE_RETRIES,
   activeAdvFilterCount,
   advFilterLabel,
+  aggCacheGet,
   aggCacheKey,
+  aggCacheSet,
   boardAsOfMs,
   boardLoadMessage,
   completenessSuffix,
@@ -31,6 +35,58 @@ describe('cache + storage keys are the shipped strings', () => {
   it('swap snapshot key uses underscores and a signed day offset', () => {
     expect(swapStorageKey('ORD', 'departures', 0)).toBe('bb_sched_ORD_departures_0');
     expect(swapStorageKey('DEN', 'arrivals', -1)).toBe('bb_sched_DEN_arrivals_-1');
+  });
+});
+
+describe('the in-memory board cache is bounded (aggCacheGet / aggCacheSet)', () => {
+  it('holds every board the controls can reach at once: each hub, both directions, three days', () => {
+    // Adding a hub (or a day) without raising the bound would evict boards a viewer can still
+    // select, and a revisit would pay for a second aggregation.
+    expect(AGG_CACHE_MAX_BOARDS).toBeGreaterThanOrEqual(HUB_ORDER.length * 2 * 3);
+  });
+
+  it('evicts the least recently stored board once past the bound', () => {
+    const cache = new Map();
+    for (const key of ['a', 'b', 'c']) aggCacheSet(cache, key, key.toUpperCase(), 2);
+    expect([...cache.keys()]).toEqual(['b', 'c']);
+    expect(aggCacheGet(cache, 'a')).toBeUndefined();
+  });
+
+  it('a hit counts as a use, so a board the viewer returns to outlives one they left', () => {
+    const cache = new Map();
+    aggCacheSet(cache, 'yesterday', 1, 2);
+    aggCacheSet(cache, 'today', 2, 2);
+    expect(aggCacheGet(cache, 'yesterday')).toBe(1);
+    aggCacheSet(cache, 'tomorrow', 3, 2);
+    expect([...cache.keys()]).toEqual(['yesterday', 'tomorrow']);
+  });
+
+  it('storing a key again replaces it and makes it the newest, without evicting anything else', () => {
+    const cache = new Map();
+    aggCacheSet(cache, 'a', 1, 2);
+    aggCacheSet(cache, 'b', 2, 2);
+    aggCacheSet(cache, 'a', 10, 2);
+    expect([...cache.entries()]).toEqual([['b', 2], ['a', 10]]);
+  });
+
+  it('a miss changes nothing; has() stays a peek that does not reorder', () => {
+    const cache = new Map([['a', 1], ['b', 2]]);
+    expect(aggCacheGet(cache, 'z')).toBeUndefined();
+    expect(cache.has('a')).toBe(true);
+    expect([...cache.keys()]).toEqual(['a', 'b']);
+  });
+
+  it('defaults to AGG_CACHE_MAX_BOARDS: a week of boards left open keeps only the bound', () => {
+    const cache = new Map();
+    for (let day = 0; day < 7; day += 1) {
+      for (const hub of HUB_ORDER) {
+        for (const dir of ['departures', 'arrivals']) aggCacheSet(cache, aggCacheKey(hub, dir, 1757649600 + day * 86400), day);
+      }
+    }
+    expect(cache.size).toBe(AGG_CACHE_MAX_BOARDS);
+    // The newest day's boards are all still there.
+    expect(aggCacheGet(cache, aggCacheKey('GUM', 'arrivals', 1757649600 + 6 * 86400))).toBe(6);
+    expect(aggCacheGet(cache, aggCacheKey('ORD', 'departures', 1757649600))).toBeUndefined();
   });
 });
 

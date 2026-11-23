@@ -42,6 +42,52 @@ export function aggCacheKey(hub, dir, timestamp) {
 }
 
 /**
+ * How many boards the in-memory aggregation cache keeps: every board the Schedule controls can
+ * reach at once, 9 hubs × 2 directions × 3 days (yesterday, today, tomorrow). Within a day no
+ * board a viewer can select is ever evicted, so a revisit never costs a second aggregation. The
+ * keys carry the start-of-day timestamp, so each new day mints new ones; without a bound a tab
+ * left open kept every board it had seen, for good. What goes first is the least recently used,
+ * which is a past day's board no selection can reach any more.
+ */
+export const AGG_CACHE_MAX_BOARDS = 9 * 2 * 3;
+
+/**
+ * Read a cached board and mark it recently used: a hit moves to the back of the Map's
+ * insertion order, so the boards a viewer keeps returning to are the last to be evicted.
+ *
+ * @template T
+ * @param {Map<string, T>} cache
+ * @param {string} key
+ * @returns {T | undefined}
+ */
+export function aggCacheGet(cache, key) {
+  if (!cache.has(key)) return undefined;
+  const value = /** @type {T} */ (cache.get(key));
+  cache.delete(key);
+  cache.set(key, value);
+  return value;
+}
+
+/**
+ * Store a board, then evict the least recently used until the cache is within `max`.
+ *
+ * @template T
+ * @param {Map<string, T>} cache
+ * @param {string} key
+ * @param {T} value
+ * @param {number} [max]
+ */
+export function aggCacheSet(cache, key, value, max = AGG_CACHE_MAX_BOARDS) {
+  cache.delete(key);
+  cache.set(key, value);
+  while (cache.size > Math.max(0, max)) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
+}
+
+/**
  * localStorage key for the equipment-swap snapshot (storage contract, inventory §29).
  * `bb_sched_<hub>_<dir>_<day>` holding `{flightNumber: icaoAircraftCode}` — underscores,
  * not the hyphens of `boardKey()`, because that is what shipped and what returning

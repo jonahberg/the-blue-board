@@ -175,7 +175,6 @@ function collectWeatherSignals(state, airportCode, weather, role) {
 function collectFaaSignals(state, airportCode, faa, role) {
   if (!airportCode || !faa) return;
 
-  const roleLabel = role === 'origin' ? 'at' : 'at';
   // parseDelayNumber handles both numeric (from JSON) and string (from XML fallback) inputs
   const severityWindow = Math.max(
     parseDelayNumber(faa.avgDelay),
@@ -184,11 +183,11 @@ function collectFaaSignals(state, airportCode, faa, role) {
   );
 
   if (faa.closure) {
-    addPoints(state, `${role}-faa-closure`, role === 'origin' ? 35 : 25, `Airport closed ${roleLabel} ${airportCode}`);
+    addPoints(state, `${role}-faa-closure`, role === 'origin' ? 35 : 25, `Airport closed at ${airportCode}`);
     return;
   }
   if (faa.groundStop) {
-    addPoints(state, `${role}-faa-gs`, role === 'origin' ? 30 : 20, `Ground stop ${roleLabel} ${airportCode}`);
+    addPoints(state, `${role}-faa-gs`, role === 'origin' ? 30 : 20, `Ground stop at ${airportCode}`);
     // Probability of extension signal (ground stops only)
     const ext = faa.probabilityOfExtension || (faa.programs && faa.programs.find(p => p.type === 'ground_stop')?.probabilityOfExtension);
     if (ext === 'HIGH') addPoints(state, `${role}-faa-gs-ext`, 5, `GS extension likely at ${airportCode}`);
@@ -200,7 +199,7 @@ function collectFaaSignals(state, airportCode, faa, role) {
     if (severityWindow >= 90) points += 8;
     else if (severityWindow >= 45) points += 4;
     const detail = severityWindow ? ` (up to ${severityWindow}m)` : '';
-    addPoints(state, `${role}-faa-gdp`, points, `Ground delay program ${roleLabel} ${airportCode}${detail}`);
+    addPoints(state, `${role}-faa-gdp`, points, `Ground delay program at ${airportCode}${detail}`);
     return;
   }
   if (faa.departureDelay) {
@@ -208,14 +207,14 @@ function collectFaaSignals(state, airportCode, faa, role) {
     if (severityWindow >= 90) points += 5;
     else if (severityWindow >= 45) points += 3;
     const detail = severityWindow ? ` (up to ${severityWindow}m)` : '';
-    addPoints(state, `${role}-faa-dep`, points, `Departure delays ${roleLabel} ${airportCode}${detail}`);
+    addPoints(state, `${role}-faa-dep`, points, `Departure delays at ${airportCode}${detail}`);
     return;
   }
   if (faa.arrivalDelay) {
     let points = role === 'origin' ? 6 : 8;
     if (severityWindow >= 90) points += 3;
     const detail = severityWindow ? ` (up to ${severityWindow}m)` : '';
-    addPoints(state, `${role}-faa-arr`, points, `Arrival delays ${roleLabel} ${airportCode}${detail}`);
+    addPoints(state, `${role}-faa-arr`, points, `Arrival delays at ${airportCode}${detail}`);
   }
 
   // Arrival rate signal — reduced capacity means higher delay risk

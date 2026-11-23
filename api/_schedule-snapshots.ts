@@ -151,6 +151,9 @@ export async function getSupabaseAdmin(): Promise<any | null> {
           console.error('Failed to initialize Supabase for schedule snapshots:', error?.message || error);
           warnedInitFailure = true;
         }
+        // Forget the failure: the callers waiting on this promise get null, the next call tries
+        // again. Kept, it answered null for the life of the instance.
+        supabaseClientPromise = null;
         return null;
       });
   }

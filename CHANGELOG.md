@@ -4,6 +4,23 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.34.0] - 2026-11-23
+
+**"Watch" now means trouble across the network, not at one hub; a turkey for Thanksgiving.**
+
+### Changed
+- **The brief's "Watch", and "Some Delays" on the hub strip, now mean trouble across the network.** From November 19 to 22 the brief read "Watch" on 199 of 219 updates, and 24 of those said "normal" in the headline: with nine hubs, one of them almost always has something. "Watch" now needs two or more United hubs impaired at once, or one impaired hub while the network disruption index is 30 or more, or the hubs averaging 70% on time or less today. A hub is impaired by a ground delay program for flights into it, under 70% on time today, FAA delays that start at 45 minutes or more, or 10% of today's departures canceled. A possible or planned program, weather, shorter FAA delays, yesterday's figures and airports that are not United hubs no longer set it on their own. "Disrupted" is unchanged. One hub in trouble is still named: its own chip keeps its colour and the headline leads with it ("Newark has a ground delay program; the other hubs are running normally.").
+- **The network chip on the hub strip reads the same figures as the brief,** so the two cannot disagree: the server's on-time figures with at least 25 departures on a board no more than three hours behind. Each hub's own chip is unchanged. Before today's figures are in, hubs that finished yesterday under 70% are named as yesterday's ("Newark and Washington Dulles ran behind yesterday.") instead of raising a "Watch".
+
+### Added
+- **A turkey for Thanksgiving.** On Thanksgiving Day, by your own clock, a small turkey peeks out from behind "The Blue Board" at the top left, runs out along the header, turns round and hides again, then peeks out every minute or so. Point at or tap the name to send it running again. It never covers a button, and with reduced motion it is a still head. `?gobble=1` on the address shows it on any day.
+
+### Fixed
+- **Closing a flight opened from search returns the keyboard to "Find a flight".** Opening the ⌘K search, choosing a flight and closing its panel left keyboard focus nowhere, because the search box it came from was gone. The same now holds for any panel whose opener has left the page.
+- **A long session no longer keeps every schedule board it has loaded in memory** (at most 54: every hub, direction and day the controls can reach).
+- **A server that failed once to load its database client tries again on the next request** instead of going without schedule snapshots until it restarts.
+- **The waitlist table's duplicate email index is gone** (`sql/025`); the unique one stays.
+
 ## [1.33.0] - 2026-11-22
 
 **The "cover a day" line can come sooner, and the phone's support button shows the amounts before the payment page.**

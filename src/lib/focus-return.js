@@ -10,28 +10,35 @@
 // focused when the content mounted and apply the rule below, so every current and future
 // caller is covered without each one hand-rolling a ref.
 //
-// Deliberately DOM-free: it takes the two facts as data so it can be unit-tested with plain
+// Deliberately DOM-free: it takes the facts as data so it can be unit-tested with plain
 // objects, and so the "should we?" decision is separable from the "how do we?" plumbing.
+
+/**
+ * The attribute that marks the control focus falls back to when an overlay's opener has left
+ * the document: the header's "Find a flight" button (`shell/Header.tsx`). The wrappers look it
+ * up by this attribute, so `components/ui` never imports from the app.
+ */
+export const FOCUS_FALLBACK_ATTR = 'data-focus-fallback';
 
 /**
  * Was focus effectively lost by the close, as opposed to moved on purpose?
  *
- * Lost means the browser has nowhere meaningful to put it: nothing focused, focus fell
- * through to `<body>`, or focus is still inside the content that is unmounting (the close
- * button focuses itself before it disappears).
+ * Lost means the browser has nowhere meaningful to put it: nothing focused, or focus fell
+ * through to `<body>`. Radix runs the close handler only after the content has unmounted (its
+ * FocusScope dispatches on a zero timeout from the unmount), so focus that was inside the
+ * content, on the close button say, has already fallen to `<body>` by then.
  *
  * NOT lost means the user moved focus themselves — the case that matters is the non-modal
  * flight panel dismissed by clicking the Leaflet container, which takes focus because Leaflet
  * gives it `tabindex="0"`. Restoring in that case would yank focus away from where they just
  * put it.
  *
- * @param {{activeElement?: {tagName?: string}|null, insideClosingContent?: boolean}} [opts]
+ * @param {{activeElement?: {tagName?: string}|null}} [opts]
  * @returns {boolean}
  */
-export function wasFocusLost({ activeElement, insideClosingContent = false } = {}) {
+export function wasFocusLost({ activeElement } = {}) {
   if (!activeElement) return true;
-  if (isBody(activeElement)) return true;
-  return Boolean(insideClosingContent);
+  return isBody(activeElement);
 }
 
 /**
@@ -52,7 +59,29 @@ export function shouldRestoreFocus({ opener, focusWasLost } = {}) {
   return true;
 }
 
+/**
+ * The element to focus when an overlay closes, or null to leave focus where it is.
+ *
+ * The opener when it can take focus (`shouldRestoreFocus`). When the opener was a real element
+ * that has since left the document, the fallback instead: the ⌘K palette's input opens the
+ * flight sheet and then unmounts with the palette, so closing the sheet would otherwise drop
+ * focus on `<body>`. The fallback is the "Find a flight" button, where that path began.
+ *
+ * An overlay that opened with nothing focused (its opener is `<body>`: a deep link, a fresh
+ * load) still gets nothing, as before.
+ *
+ * @template {{tagName?: string, isConnected?: boolean}} T
+ * @param {{opener?: T|null, fallback?: T|null, focusWasLost?: boolean}} [opts]
+ * @returns {T|null}
+ */
+export function focusReturnTarget({ opener, fallback, focusWasLost } = {}) {
+  if (shouldRestoreFocus({ opener, focusWasLost })) return opener ?? null;
+  const openerLeft = Boolean(opener) && !opener?.isConnected && !isBody(opener);
+  if (openerLeft && shouldRestoreFocus({ opener: fallback, focusWasLost })) return fallback ?? null;
+  return null;
+}
+
 /** Tag comparison rather than `=== document.body`, so this module stays DOM-free. */
 function isBody(element) {
-  return String(element.tagName || '').toUpperCase() === 'BODY';
+  return String(element?.tagName || '').toUpperCase() === 'BODY';
 }

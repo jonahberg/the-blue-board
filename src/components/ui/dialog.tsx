@@ -3,7 +3,11 @@ import { cn } from "cn"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { Button } from "@/components/ui/button"
-import { shouldRestoreFocus, wasFocusLost } from "@/lib/focus-return.js"
+import {
+  FOCUS_FALLBACK_ATTR,
+  focusReturnTarget,
+  wasFocusLost,
+} from "@/lib/focus-return.js"
 import { XIcon } from "lucide-react"
 
 function Dialog({
@@ -92,18 +96,6 @@ function DialogContent({
   // Remembering the opener here covers every caller at once — see `src/lib/focus-return.js`.
   const openerRef = React.useRef<HTMLElement | null>(null)
 
-  // One caller (AircraftDetailDialog) needs the node too, so the ref is composed rather
-  // than claimed.
-  const contentRef = React.useRef<HTMLDivElement | null>(null)
-  const composedRef = React.useCallback(
-    (node: HTMLDivElement | null) => {
-      contentRef.current = node
-      if (typeof ref === "function") ref(node)
-      else if (ref) (ref as React.RefObject<HTMLDivElement | null>).current = node
-    },
-    [ref]
-  )
-
   const handleCloseAutoFocus = React.useCallback(
     (event: Event) => {
       // The caller's handler wins. `ScheduleControls` already restores focus itself, and
@@ -111,17 +103,17 @@ function DialogContent({
       onCloseAutoFocus?.(event)
       if (event.defaultPrevented) return
 
-      const active = document.activeElement as HTMLElement | null
-      const content = contentRef.current
-      const opener = openerRef.current
-      const lost = wasFocusLost({
-        activeElement: active,
-        insideClosingContent: Boolean(content && active && content.contains(active)),
+      // The opener, or the "Find a flight" button when the opener has left the document
+      // (a dialog opened from a ⌘K result: the palette's input unmounts with the palette).
+      const target = focusReturnTarget({
+        opener: openerRef.current,
+        fallback: document.querySelector<HTMLElement>(`[${FOCUS_FALLBACK_ATTR}]`),
+        focusWasLost: wasFocusLost({ activeElement: document.activeElement }),
       })
-      if (!shouldRestoreFocus({ opener, focusWasLost: lost })) return
+      if (!target) return
 
       event.preventDefault()
-      opener?.focus?.()
+      target.focus?.()
     },
     [onCloseAutoFocus]
   )
@@ -131,7 +123,7 @@ function DialogContent({
       <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
-        ref={composedRef}
+        ref={ref}
         onCloseAutoFocus={handleCloseAutoFocus}
         className={cn(
           "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",

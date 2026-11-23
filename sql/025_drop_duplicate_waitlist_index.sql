@@ -1,0 +1,22 @@
+-- 025: drop idx_waitlist_email, a second index on waitlist.email.
+--
+-- APPLIED to production Nov 23 2026 (owner's approval Nov 22). Before: the index had 0 scans and
+-- waitlist_email_key 55. After: waitlist_pkey and waitlist_email_key remain, a duplicate email is
+-- still rejected, 212 rows unchanged. Nothing in the code depends on it either way.
+--
+-- For another environment: run it in the Supabase SQL editor (this repo keeps migrations in sql/,
+-- not supabase/migrations/). Removes one index, no table or row changes. Idempotent: safe to re-run.
+--
+-- WHY: sql/001_waitlist.sql declares `email TEXT NOT NULL UNIQUE`, and Postgres backs that
+-- constraint with its own unique index, waitlist_email_key. The same file then creates
+-- idx_waitlist_email, a plain index on the same column. The signup's upsert (`onConflict: 'email'`,
+-- api/waitlist.ts) needs the unique one, and any other lookup by email can use it too, so the
+-- second index only costs space and a little work on every write. The constraint and its index stay.
+--
+-- Check before applying (expect waitlist_pkey, waitlist_email_key and idx_waitlist_email):
+--   select indexname, indexdef from pg_indexes where schemaname = 'public' and tablename = 'waitlist';
+-- and after (expect waitlist_pkey and waitlist_email_key).
+--
+-- UNDO: create index if not exists idx_waitlist_email on public.waitlist (email);
+
+drop index if exists public.idx_waitlist_email;

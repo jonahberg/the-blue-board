@@ -136,6 +136,9 @@ export function Header({
           // exposed as aria-keyshortcuts instead.
           aria-haspopup="dialog"
           aria-keyshortcuts="Meta+K Control+K"
+          // Where an overlay's focus goes when what opened it has left the page (a ⌘K result
+          // opens the flight sheet, then the palette unmounts): src/lib/focus-return.js.
+          data-focus-fallback=""
         >
           <Search aria-hidden="true" />
           <span className="max-sm:sr-only">Find a flight</span>
