@@ -267,7 +267,10 @@ describe('TURKEY_MARKUP — the drawing', () => {
   });
 
   it('says nothing and takes nothing: no text, no title, no link, no handler, no inline style', () => {
-    expect(TURKEY_MARKUP.replace(/<[^>]*>/g, '').trim()).toBe('');
+    // No text between or around the tags (asserted directly: stripping tags with a replace reads to
+    // CodeQL as a sanitizer, js/incomplete-multi-character-sanitization).
+    expect(TURKEY_MARKUP.trim()).toMatch(/^<[^]*>$/);
+    expect(TURKEY_MARKUP).not.toMatch(/>\s*[^<\s][^<]*</);
     expect(TURKEY_MARKUP).not.toMatch(/<title|<text|<a\b|<button|tabindex|\son\w+=|style=/i);
   });
 
