@@ -1,7 +1,10 @@
 // ═══ THE DEEP-USE ASK — WHICH ONE THIS VISIT GETS ═══
 // "Going deep" is the T1/T2 trigger in `src/app/state/deep-use.ts` (five minutes of use, or
 // 20/30 engagement clicks). The first time it fires, ONE ask is chosen and latched for the
-// page's life, so answering it never brings another ask up in the same visit.
+// page's life, so answering it never brings another ask up in the same visit. Since Nov 22 2026
+// the support strip's own early moments (the second flight, 60 s after a social post;
+// src/lib/support-moment.js) may roll that same latch sooner; only a 'donate' result shows
+// anything early.
 //
 // Owner, Oct 28 2026: heavy users should be asked to donate a bit more than half the time
 // and to sign up for email a bit less than half the time. Among the asks eligible right

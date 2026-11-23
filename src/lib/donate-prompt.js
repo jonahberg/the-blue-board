@@ -8,7 +8,9 @@
 //
 // One ask per visit. The first time the trigger fires, `chooseDeepUseAsk`
 // (src/lib/deep-use-ask.js) picks the support strip, the email dialog or the email strip, and
-// the caller latches that choice for the page's life. The support ask is chosen about 60% of
+// the caller latches that choice for the page's life. (Since Nov 22 2026 the strip's early
+// moments, src/lib/support-moment.js, may roll it sooner: the second flight opened, or 60 s
+// after a social post.) The support ask is chosen about 60% of
 // the time it is eligible (Oct 28 2026). It goes quiet for 30 days after a dismiss and 90 after
 // a tap on its button, stored under the same key as the modal's answers (`bb_donate_prompt`,
 // same `<outcome>:<epoch ms>` format), so every quiet period already running carries over.

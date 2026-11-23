@@ -8,7 +8,9 @@
  *      every day of the month is covered;
  *   3. the personal count: counted from flight-panel opens, deduped per page load, shown only
  *      from five up, never sent to analytics;
- *   4. quiet: inline, no live region, a plain "Dismiss", buttons outside the click counter.
+ *   4. quiet: inline, no live region, a plain "Dismiss", buttons outside the click counter;
+ *   5. the early moments (Nov 22 2026): the second distinct flight, and 60 s after a social post,
+ *      only on a visit whose latch is the strip, each reported as the event's `trigger`.
  */
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -20,7 +22,7 @@ vi.mock('../src/lib/track.js', () => ({ track }));
 
 import SupportStrip from '../src/app/features/SupportStrip';
 import WaitlistStrip from '../src/app/features/WaitlistStrip';
-import { T2_SETTLE_MS, resetDeepUseAsk } from '../src/app/state/deep-use';
+import { T2_SETTLE_MS, deepUseAskThisVisit, resetDeepUseAsk } from '../src/app/state/deep-use';
 import { resetEngagement } from '../src/app/state/engagement';
 import { STORAGE_KEYS } from '../src/app/state/storage';
 import { resetSupportStatus } from '../src/app/state/support-status';
@@ -37,6 +39,7 @@ import {
 import { EMAIL_PROMPT_STORAGE_KEY, emailPromptRecord } from '../src/lib/email-prompt.js';
 import { TRIGGER_TIME_MS } from '../src/lib/engagement.js';
 import { supportAmountUrl, supportUrl } from '../src/lib/support-link.js';
+import { POST_TRIGGER_TIME_MS } from '../src/lib/support-moment.js';
 import { FLIGHT_COUNT_STORAGE_KEY, localMonthKey } from '../src/lib/usage-count.js';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -135,6 +138,8 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  window.history.replaceState(null, '', '/');
+  delete (document as { referrer?: string }).referrer;
   resetDeepUseAsk();
   resetEngagement();
   resetSupportStatus();
@@ -314,5 +319,176 @@ describe('SupportStrip — the personal count', () => {
     render(tree());
     await reachDeepUse();
     expect(stripText()).not.toMatch(/looked up/);
+  });
+});
+
+describe('SupportStrip — the early moments (Nov 22 2026)', () => {
+  const flight = (n: number): Selection => ({ kind: 'ident', ident: `UA${n}` });
+  const donateData = () => track.mock.calls.filter(([name]) => name === 'donate_prompt').map(([, data]) => data);
+
+  /** A page load on `path`: the arrival is read then, before anything renders. */
+  function arriveOn(path: string, dice = 0) {
+    window.history.replaceState(null, '', path);
+    resetDeepUseAsk(() => dice);
+  }
+
+  it('a visit from a tagged post: the strip at 60 s, not before, reported as trigger "post"', async () => {
+    arriveOn('/?utm_source=reddit&utm_medium=social&utm_campaign=thanksgiving');
+    render(tree());
+    act(() => vi.advanceTimersByTime(POST_TRIGGER_TIME_MS - 1000));
+    await flush();
+    expect(ask()).toBeNull();
+    expect(statusFetches()).toBe(0);
+    act(() => vi.advanceTimersByTime(1000));
+    await flush();
+    expect(ask()).not.toBeNull();
+    // Same strip, same label, same link as at five minutes.
+    expect(ask()!.getAttribute('data-support')).toBe('deep-use-prompt');
+    expect(ask()!.getAttribute('href')).toBe(supportUrl('deep-use-prompt'));
+    expect(donateData()).toEqual([{ action: 'shown', trigger: 'post' }]);
+  });
+
+  it('the arrival is read once, at load: rewriting the address afterwards changes nothing', async () => {
+    arriveOn('/#schedule&utm_source=flyertalk&utm_medium=social');
+    window.history.replaceState(null, '', '/?utm_source=flyertalk#schedule');
+    render(tree());
+    act(() => vi.advanceTimersByTime(POST_TRIGGER_TIME_MS));
+    await flush();
+    expect(ask()).not.toBeNull();
+  });
+
+  it('a Reddit referrer counts as a post too', async () => {
+    Object.defineProperty(document, 'referrer', { value: 'https://old.reddit.com/r/unitedairlines/', configurable: true });
+    arriveOn('/');
+    render(tree());
+    act(() => vi.advanceTimersByTime(POST_TRIGGER_TIME_MS));
+    await flush();
+    expect(donateData()).toEqual([{ action: 'shown', trigger: 'post' }]);
+  });
+
+  it('without the tag or a post referrer: nothing at 60 s, the strip at five minutes as "time"', async () => {
+    arriveOn('/?utm_source=email&utm_medium=email');
+    render(tree());
+    act(() => vi.advanceTimersByTime(POST_TRIGGER_TIME_MS));
+    await flush();
+    expect(ask()).toBeNull();
+    act(() => vi.advanceTimersByTime((TRIGGER_TIME_MS as number) - POST_TRIGGER_TIME_MS));
+    await flush();
+    expect(ask()).not.toBeNull();
+    expect(donateData()).toEqual([{ action: 'shown', trigger: 'time' }]);
+  });
+
+  it('the first trigger keeps its name: T1 arriving later does not relabel it, and the dismiss carries it', async () => {
+    arriveOn('/?utm_medium=social');
+    render(tree());
+    act(() => vi.advanceTimersByTime(TRIGGER_TIME_MS as number));
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(donateData()).toEqual([
+      { action: 'shown', trigger: 'post' },
+      { action: 'later', trigger: 'post' },
+    ]);
+    expect(stored()?.outcome).toBe('later');
+  });
+
+  it('a post visit whose latch picked the email ask: no strip early, and no other ask early either', async () => {
+    arriveOn('/?utm_medium=social', 0.99);
+    render(tree());
+    act(() => vi.advanceTimersByTime(POST_TRIGGER_TIME_MS));
+    await flush();
+    // The latch was rolled at the moment, with the usual dice.
+    expect(deepUseAskThisVisit()).toBe('email');
+    expect(ask()).toBeNull();
+    expect(emailStrip()).toBeNull();
+    act(() => vi.advanceTimersByTime(TRIGGER_TIME_MS as number));
+    await flush();
+    expect(ask()).toBeNull();
+    expect(donateEvents()).toEqual([]);
+  });
+
+  it('the second distinct flight brings the strip up after T2\'s settle, as "flights"', async () => {
+    render(tree());
+    act(() => selectFlight(flight(1)));
+    act(() => vi.advanceTimersByTime(10_000));
+    await flush();
+    expect(ask()).toBeNull();
+    act(() => selectFlight(flight(2)));
+    act(() => vi.advanceTimersByTime(T2_SETTLE_MS - 1));
+    await flush();
+    expect(ask()).toBeNull();
+    act(() => vi.advanceTimersByTime(1));
+    await flush();
+    expect(ask()).not.toBeNull();
+    expect(donateData()).toEqual([{ action: 'shown', trigger: 'flights' }]);
+  });
+
+  it('a third flight inside the settle restarts the wait', async () => {
+    render(tree());
+    act(() => selectFlight(flight(1)));
+    act(() => selectFlight(flight(2)));
+    act(() => vi.advanceTimersByTime(T2_SETTLE_MS - 500));
+    act(() => selectFlight(flight(3)));
+    act(() => vi.advanceTimersByTime(T2_SETTLE_MS - 1));
+    await flush();
+    expect(ask()).toBeNull();
+    act(() => vi.advanceTimersByTime(1));
+    await flush();
+    expect(ask()).not.toBeNull();
+  });
+
+  it('the same flight twice is one flight, whichever way it was opened: no early strip', async () => {
+    render(tree());
+    act(() => selectFlight(flight(1)));
+    act(() => selectFlight(null));
+    act(() => selectFlight({ kind: 'ident', ident: ' ua1 ' }));
+    act(() => vi.advanceTimersByTime(30_000));
+    await flush();
+    expect(ask()).toBeNull();
+  });
+
+  it('a waitlist visit: the second flight brings up nothing; the email strip still waits for T1', async () => {
+    localStorage.setItem(DONATE_PROMPT_STORAGE_KEY, donatePromptRecord('later', Date.now() - 3 * DAY));
+    localStorage.setItem(EMAIL_PROMPT_STORAGE_KEY, emailPromptRecord(Date.now() - 3 * DAY));
+    render(tree());
+    act(() => selectFlight(flight(1)));
+    act(() => selectFlight(flight(2)));
+    act(() => vi.advanceTimersByTime(T2_SETTLE_MS));
+    await flush();
+    expect(deepUseAskThisVisit()).toBe('waitlist');
+    expect(ask()).toBeNull();
+    expect(emailStrip()).toBeNull();
+    act(() => vi.advanceTimersByTime(TRIGGER_TIME_MS as number));
+    await flush();
+    expect(emailStrip()).not.toBeNull();
+    expect(ask()).toBeNull();
+  });
+
+  it('an early strip is this visit\'s one ask: after a dismiss, T1 brings up nothing', async () => {
+    render(tree());
+    act(() => selectFlight(flight(1)));
+    act(() => selectFlight(flight(2)));
+    act(() => vi.advanceTimersByTime(T2_SETTLE_MS));
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    act(() => vi.advanceTimersByTime(TRIGGER_TIME_MS as number));
+    await flush();
+    expect(ask()).toBeNull();
+    expect(emailStrip()).toBeNull();
+    expect(donateData()).toEqual([
+      { action: 'shown', trigger: 'flights' },
+      { action: 'later', trigger: 'flights' },
+    ]);
+  });
+
+  it('never puts the address, the referrer or a flight number in an event', async () => {
+    Object.defineProperty(document, 'referrer', { value: 'https://www.reddit.com/r/unitedairlines/', configurable: true });
+    arriveOn('/?utm_source=reddit&utm_medium=social&utm_campaign=thanksgiving');
+    render(tree());
+    act(() => selectFlight(flight(929)));
+    act(() => vi.advanceTimersByTime(POST_TRIGGER_TIME_MS));
+    await flush();
+    fireEvent.click(ask()!);
+    const sent = JSON.stringify(track.mock.calls);
+    expect(sent).not.toMatch(/reddit|utm|social|thanksgiving|UA929|929/i);
   });
 });
