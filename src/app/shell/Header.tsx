@@ -23,6 +23,7 @@ import { openSupportSheet } from '../state/support-sheet';
 import { useUi } from '../state/ui';
 import { useWatch } from '../state/watch';
 import { TOUCH_CONTROL } from './touch-target';
+import { TurkeyEgg } from './TurkeyEgg';
 
 /** HH:MM:SS in UTC — the clock every ops room runs on. */
 function utcClock(now: number): string {
@@ -76,8 +77,11 @@ export function Header({
           visible wordmark and tagline announced different words from the ones on screen. The
           capitals are CSS, so a screen reader reads a name, not an acronym. */}
       <a href="#live" className="relative flex min-w-0 items-baseline gap-2 no-underline">
-        <span className="whitespace-nowrap text-xs font-semibold tracking-tight uppercase sm:text-sm">
+        {/* `relative` anchors the Thanksgiving turkey's clipping box to the wordmark's right edge
+            (TurkeyEgg: decorative, aria-hidden, no pointer events; nothing on any other day). */}
+        <span className="relative whitespace-nowrap text-xs font-semibold tracking-tight uppercase sm:text-sm">
           The Blue Board
+          <TurkeyEgg now={now} />
         </span>
         <span className="hidden truncate text-[10px] uppercase tracking-widest text-muted-foreground xl:inline">
           <span className="sr-only">: </span>
