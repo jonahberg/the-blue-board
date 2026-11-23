@@ -114,8 +114,10 @@ Open work, checked against the code on 2026-11-10. Each entry names the file it 
 - [x] `api/_schedule-snapshots.ts` `getSupabaseAdmin`: Fixed Nov 23 2026: the `.catch()` resets
   the cached promise, so the next call retries (`tests/schedule-snapshots-client-retry.test.js`).
   Was: a failed `@supabase/supabase-js` import cached a `null` promise for the life of the instance.
-- [ ] `sql/001_waitlist.sql`: `idx_waitlist_email` duplicates the UNIQUE constraint's index.
-  Drop it in the next migration.
+- [x] `sql/001_waitlist.sql`: Written Nov 23 2026 as `sql/025_drop_duplicate_waitlist_index.sql`,
+  not yet applied (the owner applies it in the Supabase SQL editor; the file has the checks and
+  the undo). Was: `idx_waitlist_email` duplicates the UNIQUE constraint's index
+  (`waitlist_email_key`).
 - [x] `api/irops.ts`: Fixed Nov 23 2026: the error branch names its hub by the loop index. Was:
   `results.indexOf(result)`.
 - [x] `src/lib/delay-risk.js`: Fixed Nov 23 2026: `roleLabel` is gone and the five FAA factors
