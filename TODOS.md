@@ -111,8 +111,9 @@ Open work, checked against the code on 2026-11-10. Each entry names the file it 
   and evicts the least recently used (`aggCacheGet` / `aggCacheSet` in `src/lib/schedule-load.js`,
   `tests/schedule-load.test.js`). Was: never capped. Only Refresh deleted a key, so a long session
   kept one board per hub, direction and day.
-- [ ] `api/_schedule-snapshots.ts` `getSupabaseAdmin`: a failed `@supabase/supabase-js` import
-  caches a `null` promise for the life of the instance. Reset it in the `.catch()`.
+- [x] `api/_schedule-snapshots.ts` `getSupabaseAdmin`: Fixed Nov 23 2026: the `.catch()` resets
+  the cached promise, so the next call retries (`tests/schedule-snapshots-client-retry.test.js`).
+  Was: a failed `@supabase/supabase-js` import cached a `null` promise for the life of the instance.
 - [ ] `sql/001_waitlist.sql`: `idx_waitlist_email` duplicates the UNIQUE constraint's index.
   Drop it in the next migration.
 - [ ] `api/irops.ts:378`: the error branch looks up its hub with `results.indexOf(result)`. Use
