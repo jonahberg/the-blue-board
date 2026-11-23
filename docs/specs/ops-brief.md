@@ -67,7 +67,7 @@ zone (`"9:00 PM ET"`), airport codes and every name that stands for them (`"ORD"
 | `otp.floor` | otp | same, when no hub is under 70%; names the lowest hub only when it is under 80% (its `link` is that hub's board either way). "Reporting so far today" / "reporting yesterday" when every board agrees, plain "reporting" when they do not: true when Tokyo Narita and Guam have too few departures yet | All seven United hubs reporting so far today are at 85% on time or better. / … at 75% on time or better; Los Angeles is the lowest. | calm |
 | `otp.soft` | otp | same, when some are | Two of the seven United hubs reporting so far today are under 70% on time: Houston (62%) and Newark (55%). | watch when two or more are soft on today's boards, else calm |
 | `net.index` | network | `/api/irops` `score`, `IROPS_MINOR_AT`/`IROPS_SIGNIFICANT_AT`; left out when boards more than 3 h behind hold over a quarter of the index's departures (`BRIEF_INDEX_MAX_STALE_SHARE`) | The network disruption index, which weighs cancellations, long delays and diversions across United's hub departures, is 17.3, in the normal range (under 20). ("Network disruption index" is the measure's name on the page.) | significant → disrupted; minor → calm on its own (Nov 22 2026: an ordinary evening; it counts beside one impaired hub at 30 or more, through `net.status`) |
-| `net.status` | network | `networkStatus()` (`src/lib/ops-health.js`, the strip's chip) | The network status, which combines … , is "Smooth Ops". | minor → watch, significant → disrupted (since Nov 22 2026 minor is the breadth rule, Tone below) |
+| `net.status` | network | `networkStatus()` (`src/lib/ops-health.js`, the strip's chip) over `networkInputs()` (`src/lib/hub-health.js`): the same gated readings, board days, FAA index, index and cancellation rates the strip passes | The network status, which combines … , is "Smooth Ops". | minor → watch, significant → disrupted (since Nov 22 2026 minor is the breadth rule, Tone below) |
 | `cxl.confirmed` | cancellations | `cancellations − cancellationsLikely`; **not built under 5** (`BRIEF_MIN_CONFIRMED_CANCELLATIONS`; `collection.skipped`: "1 confirmed (under 5), not news"). "today"/"yesterday" when boards holding 95% of the departures agree | 12 United departures from its hubs are confirmed canceled today. | calm |
 | `cxl.unconfirmed` | cancellations | `cancellationsLikely`, `likelyCanceledSeenFlying` | 162 departures from United's hubs are marked "likely canceled" by a flight-data provider but not confirmed. That label is often wrong: 131 flights marked that way today were seen flying. (Stands on its own: the confirmed count is often not sent.) | calm, severity 1: a caveat, below every program and planned hub program, never the template's lead (prompt rule 4: mention it only when cancellations are the story) |
 | `cxl.<HUB>` | cancellations | per hub, when ≥ 3 confirmed and the board is no more than 3 h behind (see Floors and freshness) | Houston (IAH) has 12 confirmed cancellations among its 447 departures today. | ≥10% today impairs the hub (calm alone) |
@@ -98,10 +98,19 @@ on every fixture's user message.
 **Floors and freshness.** A hub needs ≥ 25 operated departures (`BRIEF_MIN_OPERATED`, the client's
 own floor) for any on-time fact. Its board must be no more than 3 h behind (`BRIEF_MAX_BOARD_AGE_MS`)
 for its on-time and `cxl.<HUB>` facts; live boards run 1–3 h old, so the strip's 60-min stale constant
-would drop most of them. "Behind" is the board's **coverage gap** (`boardCoverageGapSec`,
+would drop most of them. Since Nov 22 2026 these are the gates of the **network level** on both
+sides (`networkReadings` in `src/lib/hub-health.js`): the strip's network chip and the fallback ticker
+count only the server's `/api/irops` readings with 25+ departed on a board no more than 3 h behind,
+never a visitor's own loaded boards, so it reads the brief's level (each hub's own chip still shows
+its figure from 5 departed). With no `/api/irops` answer there are no gated readings and the network
+chip waits. "Behind" is the board's **coverage gap** (`boardCoverageGapSec`,
 `src/lib/hub-health.js`, carried on `/api/irops` as `coverageGapSec` with `boardDayEndSec`): the part
 of the board's own day that passed after it was built. For today's board that is its age. Before 6 AM
-local a hub's board is still yesterday's, and its statement says "yesterday"; a yesterday board built
+local a hub's board is still yesterday's, and its statement says "yesterday". Which day a board is
+comes from the board itself (`boardDayOffsetAt`: over once its `boardDayEndSec` has passed, else its
+`boardDayOffset`, the hub's clock only for a payload that says neither), for the wording, the
+impairment and the cancellation rates alike: a CDN copy of yesterday's final board read at 06:10 is
+yesterday's (Nov 22 2026, review: the clock had called it "so far today" and set a false watch); a yesterday board built
 after local midnight is final (gap 0) however old it is, and one built at 21:00 is 3 h behind (until
 Nov 2026 the rule was plain age, which dropped every final yesterday board). `net.index` is left out
 when boards more than 3 h behind hold over 25% of the index's departures (`BRIEF_INDEX_MAX_STALE_SHARE`;
@@ -213,7 +222,8 @@ so "what a fact allows" and "what a sentence claims" are measured with one ruler
    carries as `net.status`, built from the same inputs as the strip's chip: `networkInputs` in
    `src/lib/hub-health.js`): two or more United hubs **impaired now**, or exactly one while the
    network disruption index is 30 or more (`NETWORK_WATCH_INDEX_WITH_ONE_HUB`), or the hubs' average
-   on-time at 70% or less. A hub is impaired by a ground delay program for flights into it, an on-time
+   on-time **for today** at 70% or less (yesterday's readings never count, through a hub or the
+   average; the under-50% test still reads every reading). A hub is impaired by a ground delay program for flights into it, an on-time
    figure under 70% on **today's** board, FAA departure or arrival delays whose reported lower bound is
    45 minutes or more (`HUB_IMPAIRING_FAA_DELAY_MIN`; none, or only an average, does not count), or
    10% of today's departures confirmed canceled on a current board (`hubCancelRates`). Those facts
@@ -326,6 +336,7 @@ out of the key entirely, id included, so it appearing or disappearing is not a c
 | `air.total`, `air.starlink` | none (`null`): the count moves all day |
 | `air.normal` | usual / above / below (±10% of the 7-day median), `:inline` / `:lighter` while it says the count is in line with a lighter schedule / that the schedule is lighter, and below:watch:NN / below:disrupted:NN at 35% / 45% fewer than expected, NN the shortfall against the usual in ten-point steps (the brief quotes that figure) |
 | `net.index` | its band (normal / minor / significant), not the score |
+| `net.status` | the level, and since Nov 22 2026 the sorted impaired hubs (`status:normal:EWR`, `status:minor:EWR,SFO`): one hub's trouble is named, not a tone, so a hub becoming or ceasing to be the impaired one (a rate crossing 10%, a delay's lower bound crossing 45 minutes, 68% ↔ 72% inside one 5-point bucket) rewrites the brief though no tone or other key moves. Every tone change the breadth rule makes moves this key (`tests/watch-breadth.test.js`; the review's 4,000-state fuzz found no key giving two tones) |
 | `otp.<HUB>` | none while at or above 80% (`BRIEF_HEALTHY_HUB_OTP`), so a healthy hub's reading moving, appearing or aging out is not a change; below 80%, rounded to 5 points. Not sending healthy hubs' facts on a healthy day (Nov 2026) therefore changes no key |
 | `cxl.confirmed` | none under 10, sent (5–9) or not (0–4): the send threshold sits inside that band, so 4 ↔ 5 never rewrites; from 10, the existing count steps (10–12, 13–17, …) |
 | `otp.floor` | none while every hub is healthy; otherwise the floor rounded to 5. The hub count is never material |
