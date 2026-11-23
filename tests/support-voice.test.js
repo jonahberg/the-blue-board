@@ -39,6 +39,7 @@ const {
   parseSupportStatus,
   supportCardCopy,
   supportLadder,
+  supportSheetCopy,
   supportStatusFromRows,
   supportStripCopy,
   todayLine,
@@ -94,6 +95,9 @@ function libStrings() {
     if (strip) for (const key of ['lead', 'text', 'short', 'button']) out.push([`strip.${key}(${state})`, strip[key]]);
     const flight = flightPageSupportCopy(s);
     out.push([`flight.text(${state})`, flight.text], [`flight.link(${state})`, flight.link]);
+    const sheet = supportSheetCopy(s, 'mobile-header');
+    out.push([`sheet.core(${state})`, sheet.core], [`sheet.today(${state})`, sheet.today], [`sheet.about(${state})`, sheet.about]);
+    for (const step of sheet.ladder?.amounts ?? []) out.push([`sheet ${step.amount}(${state})`, step.text]);
   }
   const card = supportCardCopy({ checkedAgainst: 'Fleet data is cross-checked against the FAA registry.', supporterCount: SUPPORTERS.length });
   for (const [key, value] of Object.entries(card)) out.push([`card.${key}`, value]);
@@ -132,6 +136,9 @@ describe('the words in src/lib/cover-a-day.js', () => {
       expect(flightPageSupportCopy(s).link, state).toMatch(BUTTON);
       const strip = supportStripCopy(s);
       if (strip) expect(strip.button, state).toMatch(BUTTON);
+      // The phone sheet's $17 is its day button whenever it names a day.
+      const day = supportSheetCopy(s, 'mobile-header').ladder.amounts.find((a) => a.amount === DAILY_COST_USD);
+      if (day.text !== '$17 · one day') expect(day.text, state).toMatch(BUTTON);
     }
     expect(supportCardCopy({ supporterCount: 3 }).button).toMatch(BUTTON);
     expect(words.HELP_COVER_LABEL).toMatch(BUTTON);
@@ -224,6 +231,7 @@ describe('the source around every element that carries data-support', () => {
       'src/app/features/SupportStrip.tsx',
       'src/app/features/BmacToast.tsx',
       'src/app/features/CoverADay.tsx',
+      'src/app/features/SupportSheet.tsx',
       'src/app/features/DisclaimerDialog.tsx',
       'src/app/features/LegalPopover.tsx',
       'src/components/site/SupportNote.astro',

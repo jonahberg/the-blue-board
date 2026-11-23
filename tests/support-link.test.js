@@ -211,7 +211,9 @@ describe('donation links in the repo', () => {
         labels.push(label);
       }
     }
-    expect(labels.length).toBeGreaterThanOrEqual(9);
+    // Eight since Nov 22 2026: the phone header's icon and the More sheet's row open the
+    // "Cover a day" sheet, whose links come from supportLadder (tests/support-sheet.test.tsx).
+    expect(labels.length).toBeGreaterThanOrEqual(8);
     expect(new Set(labels).size, 'two placements share a label').toBe(labels.length);
   });
 });

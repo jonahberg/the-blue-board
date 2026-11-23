@@ -84,18 +84,21 @@ describe('Header search button', () => {
     }
   });
 
-  it('on phones swaps the "?" for a labelled support link; the "?" returns from md: up', () => {
+  it('on phones swaps the "?" for a labelled support button; the "?" returns from md: up', () => {
     renderHeader();
-    // The site-wide "cover a day" wording (Nov 2026); an icon-only link, so the name is its label.
-    const support = screen.getByRole('link', { name: 'Cover a day of The Blue Board' });
+    // The site-wide "cover a day" wording (Nov 2026); an icon-only control, so the name is its label.
+    // Since Nov 22 2026 it opens the "Cover a day" sheet rather than linking to Stripe
+    // (tests/support-sheet.test.tsx): a button, with no address and no `data-support`.
+    expect(screen.queryByRole('link', { name: 'Cover a day of The Blue Board' })).toBeNull();
+    const support = screen.getByRole('button', { name: 'Cover a day of The Blue Board' });
+    expect(support.tagName).toBe('BUTTON');
     expect(support.getAttribute('title')).toBe('Cover a day of The Blue Board');
-    expect(support.getAttribute('href')).toBe(supportUrl('mobile-header'));
+    expect(support.hasAttribute('href')).toBe(false);
+    expect(support.hasAttribute('data-support')).toBe(false);
+    expect(support.getAttribute('aria-haspopup')).toBe('dialog');
     // A neutral "support" icon, not the old coffee cup; the name comes from aria-label.
     expect(support.querySelector('svg')?.getAttribute('class')).toContain('lucide-hand-heart');
     expect(support.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
-    expect(support.getAttribute('target')).toBe('_blank');
-    expect(support.getAttribute('rel')).toContain('noopener');
-    expect(support.getAttribute('data-support')).toBe('mobile-header');
     const supportClasses = support.className.split(/\s+/);
     expect(supportClasses).toContain('md:hidden');
     expect(supportClasses).toEqual(expect.arrayContaining(HIT_BOX_44));

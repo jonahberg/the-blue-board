@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { useFeed } from '../state/feed';
 import { useNow } from '../state/hooks';
 import { usePrefs } from '../state/prefs';
+import { openSupportSheet } from '../state/support-sheet';
 import { useUi } from '../state/ui';
 import { useWatch } from '../state/watch';
 import { TOUCH_CONTROL } from './touch-target';
@@ -182,20 +183,16 @@ export function Header({
             dashboard?" moves into the More sheet. Counted as `mobile-header` by the delegated
             support_click listener (src/lib/support-tracking.js). */}
         <Button
-          asChild
           variant="ghost"
           className={cn(CONTROL, 'p-0 text-muted-foreground md:hidden')}
+          // Since Nov 22 2026 it opens the "Cover a day" sheet (features/SupportSheet.tsx), amounts
+          // first, instead of going straight to Stripe; the open is `support_open`.
+          onClick={(event) => openSupportSheet('mobile-header', event.currentTarget)}
+          aria-haspopup="dialog"
+          aria-label="Cover a day of The Blue Board"
+          title="Cover a day of The Blue Board"
         >
-          <a
-            href={supportUrl('mobile-header')}
-            target="_blank"
-            rel="noopener noreferrer"
-            data-support="mobile-header"
-            aria-label="Cover a day of The Blue Board"
-            title="Cover a day of The Blue Board"
-          >
-            <HandHeart aria-hidden="true" />
-          </a>
+          <HandHeart aria-hidden="true" />
         </Button>
 
         <Button

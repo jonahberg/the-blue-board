@@ -5,9 +5,11 @@ import { supportUrl } from '../src/lib/support-link.js';
 import { track } from '../src/lib/track.js';
 import {
   SUPPORT_CLICK_EVENT,
+  SUPPORT_OPEN_EVENT,
   installSupportClickTracking,
   isSupportUrl,
   supportPlacement,
+  trackSupportOpen,
 } from '../src/lib/support-tracking.js';
 
 describe('track — Vercel Web Analytics custom events via the script tag', () => {
@@ -97,5 +99,26 @@ describe('support click tracking', () => {
     expect(send).toHaveBeenCalledTimes(2);
     expect(send).toHaveBeenNthCalledWith(1, SUPPORT_CLICK_EVENT, { from: 'landed-toast' });
     expect(send).toHaveBeenNthCalledWith(2, SUPPORT_CLICK_EVENT, { from: 'about-membership' });
+  });
+});
+
+describe('trackSupportOpen — opening the phone\'s "Cover a day" sheet (Nov 22 2026)', () => {
+  it('sends support_open with the opener\'s label and nothing else', () => {
+    expect(SUPPORT_OPEN_EVENT).toBe('support_open');
+    const send = vi.fn();
+    trackSupportOpen('mobile-header', send);
+    trackSupportOpen('  mobile-more  ', send);
+    expect(send.mock.calls).toEqual([
+      ['support_open', { from: 'mobile-header' }],
+      ['support_open', { from: 'mobile-more' }],
+    ]);
+  });
+
+  it('labels a missing opener "other" and caps the label at 40 characters, like a placement', () => {
+    const send = vi.fn();
+    trackSupportOpen('', send);
+    trackSupportOpen('x'.repeat(60), send);
+    expect(send.mock.calls[0][1]).toEqual({ from: 'other' });
+    expect(send.mock.calls[1][1].from).toHaveLength(40);
   });
 });

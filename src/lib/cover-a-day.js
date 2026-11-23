@@ -441,6 +441,13 @@ export const OTHER_AMOUNT_LABEL = 'Other amount';
 /** The About section's opening line: the one reason, then the owner's figures. */
 export const ABOUT_INTRO_LINE = `${CORE_LINE_FLYERS} It costs about $${MONTHLY_COST_USD} a month to run, about ${COST} a day.`;
 
+/**
+ * The phone's "Cover a day" sheet (Nov 22 2026, `features/SupportSheet.tsx`): its title (the About
+ * section's own heading), and the words of its way to this month's calendar, which lives in About.
+ */
+export const SUPPORT_SHEET_TITLE = 'Cover a day';
+export const SUPPORT_SHEET_ABOUT_LABEL = "See this month's days in About";
+
 /** The landed toast. It makes no claim about today; only its button may name a day. */
 export const LANDED_TOAST_LINE = `Glad you landed ✈️ ${CORE_LINE_FLYERS}`;
 
@@ -550,6 +557,42 @@ export function supportLadder(placement, { other = `${placement}-other`, without
  */
 export function aboutLadder(status, { links } = {}) {
   return supportLadder('about', { without: coverTarget(status) ? [DAILY_COST_USD] : [], links });
+}
+
+/**
+ * The phone's "Cover a day" sheet (Nov 22 2026), opened only by a tap: the phone header's icon
+ * (`mobile-header`) or the More sheet's row (`mobile-more`). In the site's existing words:
+ *   - `core`: the one reason;
+ *   - `today`: the line of truth about today ("No one has covered today yet." / "Today is covered by
+ *     Dana R."), or null when the status cannot vouch for it;
+ *   - `ladder`: one fixed link per amount, each labelled `<placement>-<amount>`, then "Other amount"
+ *     (`<placement>-other`). Its $17 is the day's button: when it can say which day $17 covers right
+ *     now it says so with About's and the strip's label ("Cover today · $17"), on the same fixed $17
+ *     link; otherwise "$17 · one day". So the sheet never has two $17 links, and no link carries the
+ *     bare placement (opening the sheet is `support_open`; a link tap is its amount's label);
+ *   - `help`: when no amount has a link, one "Help cover a day" on the any-amount link instead;
+ *   - `about`: the way to this month's calendar in About, only when the status is known (About shows
+ *     no calendar otherwise).
+ * It is shown in every state, including the ones where the strip stays down: the visitor asked.
+ *
+ * @param {object|null|undefined} status from `parseSupportStatus`
+ * @param {string} placement `mobile-header` or `mobile-more`
+ * @param {{links?: Record<number, string|null>}} [opts] test seam for the fixed links
+ */
+export function supportSheetCopy(status, placement, { links } = {}) {
+  const ladder = supportLadder(placement, { links });
+  if (ladder && coverTarget(status)) {
+    const day = coverButtonLabel(status);
+    ladder.amounts = ladder.amounts.map((step) => (step.amount === DAILY_COST_USD ? { ...step, text: day } : step));
+  }
+  const other = `${placement}-other`;
+  return {
+    core: CORE_LINE_FLYERS,
+    today: todayLine(status),
+    ladder,
+    help: ladder ? null : { text: HELP_COVER_LABEL, placement: other, href: supportUrl(other) },
+    about: status?.configured ? SUPPORT_SHEET_ABOUT_LABEL : null,
+  };
 }
 
 /** End a sentence on a label without doubling an initial's period ("Dana R." not "Dana R.."). */
