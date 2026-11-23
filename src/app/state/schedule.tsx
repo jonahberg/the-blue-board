@@ -45,7 +45,9 @@ import {
   PRELOAD_HUBS,
   PRELOAD_TTL_MS,
   SCHEDULE_TIMEOUT_MS,
+  aggCacheGet,
   aggCacheKey,
+  aggCacheSet,
   retryDelayMs,
   serverClockOffsetSec,
   shouldRetryPartial,
@@ -206,7 +208,9 @@ export function ScheduleProvider({
   }, [defaultHub]);
 
   // Refs, not state: none of these should re-render anything, and the loader reads them
-  // from inside async callbacks where a captured state value would be stale.
+  // from inside async callbacks where a captured state value would be stale. The aggregation
+  // cache is bounded (AGG_CACHE_MAX_BOARDS): read it through aggCacheGet, write through
+  // aggCacheSet. `has()` is a peek that does not count as a use.
   const aggCache = useRef(new Map<string, ScheduleResponse>());
   const inFlight = useRef(new Map<string, Promise<ScheduleResponse>>());
   const clockOffsetSec = useRef(0);
@@ -228,7 +232,7 @@ export function ScheduleProvider({
   const fetchBoard = useCallback(
     async (hub: string, dir: BoardDirection, timestamp: number): Promise<ScheduleResponse> => {
       const key = aggCacheKey(hub, dir, timestamp);
-      const cached = aggCache.current.get(key);
+      const cached = aggCacheGet(aggCache.current, key);
       if (cached) return cached;
       const existing = inFlight.current.get(key);
       if (existing) return existing;
@@ -243,7 +247,7 @@ export function ScheduleProvider({
           const offset = serverClockOffsetSec(data.serverNowMs, 0) as number | null;
           if (offset !== null) clockOffsetSec.current = offset;
           if (data.error) throw new Error(data.error);
-          if (!data.partial) aggCache.current.set(key, data);
+          if (!data.partial) aggCacheSet(aggCache.current, key, data);
           return data;
         } catch (error) {
           // An abort surfaces as a DOMException in browsers and a plain Error elsewhere;

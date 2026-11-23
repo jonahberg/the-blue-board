@@ -106,8 +106,11 @@ Open work, checked against the code on 2026-11-10. Each entry names the file it 
 
 ## Small cleanups
 
-- [ ] `src/app/state/schedule.tsx:210`: the `aggCache` Map is never capped. Only Refresh deletes
-  a key, so a long session keeps one board per hub, direction and day.
+- [x] `src/app/state/schedule.tsx`: Fixed Nov 23 2026: the `aggCache` Map holds at most
+  `AGG_CACHE_MAX_BOARDS` (54: 9 hubs × 2 directions × 3 days, every board the controls can reach)
+  and evicts the least recently used (`aggCacheGet` / `aggCacheSet` in `src/lib/schedule-load.js`,
+  `tests/schedule-load.test.js`). Was: never capped. Only Refresh deleted a key, so a long session
+  kept one board per hub, direction and day.
 - [ ] `api/_schedule-snapshots.ts` `getSupabaseAdmin`: a failed `@supabase/supabase-js` import
   caches a `null` promise for the life of the instance. Reset it in the `.catch()`.
 - [ ] `sql/001_waitlist.sql`: `idx_waitlist_email` duplicates the UNIQUE constraint's index.
