@@ -116,8 +116,8 @@ Open work, checked against the code on 2026-11-10. Each entry names the file it 
   Was: a failed `@supabase/supabase-js` import cached a `null` promise for the life of the instance.
 - [ ] `sql/001_waitlist.sql`: `idx_waitlist_email` duplicates the UNIQUE constraint's index.
   Drop it in the next migration.
-- [ ] `api/irops.ts:378`: the error branch looks up its hub with `results.indexOf(result)`. Use
-  the loop index.
+- [x] `api/irops.ts`: Fixed Nov 23 2026: the error branch names its hub by the loop index. Was:
+  `results.indexOf(result)`.
 - [ ] `src/lib/delay-risk.js:178`: `roleLabel` is `'at'` on both branches. Inline it, or give
   destinations their own wording.
 - [ ] Waitlist: decide whether to stay on hand-rolled Supabase + Resend or move to a hosted list

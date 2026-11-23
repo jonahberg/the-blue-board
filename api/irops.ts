@@ -478,7 +478,8 @@ async function buildIropsData() {
     boardDayByHub[hub] = hubCache[hub].day;
   };
 
-  for (const result of results) {
+  // `results` is in HUBS order (Promise.allSettled keeps it), so the index names the hub.
+  for (const [index, result] of results.entries()) {
     if (result.status === 'fulfilled') {
       const { hub, flights, generatedAt } = result.value;
       if (flights && flights.length > 0) {
@@ -496,7 +497,7 @@ async function buildIropsData() {
         flightsByHub[hub] = [];
       }
     } else {
-      const hub = HUBS[results.indexOf(result)];
+      const hub = HUBS[index];
       console.error(`IROPS: Error fetching ${hub}:`, result.reason?.message);
       if (hubCache[hub] && (Date.now() - hubCache[hub].fetchedAt) < 60 * 60 * 1000) {
         useHubCache(hub);
