@@ -4,6 +4,13 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.32.0] - 2026-11-22
+
+**On a computer, the header now has a way to help cover a day.**
+
+### Added
+- **"Help cover a day" in the dashboard header on a computer.** Two in three visitors use a computer, and there they saw no way to give until the strip that appears after five minutes of use, or unless they opened ⓘ → About. Phones have had a button in the header since October. Now the header on a computer has a quiet "Help cover a day" link beside the "?", to the page where you choose your own amount. On narrower windows (below 1081 pixels) it shows just the icon, and the words appear when you point at it.
+
 ## [1.31.3] - 2026-11-18
 
 **A lighter holiday schedule no longer reads as far fewer flights; flight lookups stop flooding the database.**
