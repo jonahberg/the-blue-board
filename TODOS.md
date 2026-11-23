@@ -139,14 +139,21 @@ Open work, checked against the code on 2026-11-10. Each entry names the file it 
 - [x] `api/_schedule-snapshots.ts` `getSupabaseAdmin`: Fixed Nov 23 2026: the `.catch()` resets
   the cached promise, so the next call retries (`tests/schedule-snapshots-client-retry.test.js`).
   Was: a failed `@supabase/supabase-js` import cached a `null` promise for the life of the instance.
-- [x] `sql/001_waitlist.sql`: Written Nov 23 2026 as `sql/025_drop_duplicate_waitlist_index.sql`,
-  not yet applied (the owner applies it in the Supabase SQL editor; the file has the checks and
-  the undo). Was: `idx_waitlist_email` duplicates the UNIQUE constraint's index
+- [x] `sql/001_waitlist.sql`: Dropped Nov 23 2026 (`sql/025_drop_duplicate_waitlist_index.sql`,
+  applied to production the same day; the file has the checks and the undo). Was: `idx_waitlist_email` duplicates the UNIQUE constraint's index
   (`waitlist_email_key`).
 - [x] `api/irops.ts`: Fixed Nov 23 2026: the error branch names its hub by the loop index. Was:
   `results.indexOf(result)`.
 - [x] `src/lib/delay-risk.js`: Fixed Nov 23 2026: `roleLabel` is gone and the five FAA factors
   read "at <airport>" for origin and destination alike, the wording they already had
   (`tests/delay-risk.test.js` pins both). Was: `'at'` on both branches of a ternary.
+- [ ] `src/app/features/WaitlistDialog.tsx`: the local `done` flag outlives a close, because the
+  dialog is mounted once for the page (`Dashboard.tsx`). After a signup and close, a later
+  `setWaitlistOpen(true)` would reopen on the "You're on the list" card. No surface does that
+  within a visit today (the strip and the email prompt check `submitted`). Reset `done` on close.
+  Found Nov 23 2026 while writing `tests/engagement-store.test.tsx`.
+- [ ] `tests/warm-rollover.test.js` ("never displaces a today board…") hit its 5 s timeout once
+  under full-suite load on Nov 23 2026; it passes alone and in every later run. Give it a longer
+  timeout or fake timers if it recurs.
 - [ ] Waitlist: decide whether to stay on hand-rolled Supabase + Resend or move to a hosted list
   (Loops, Resend Audiences, ConvertKit).
