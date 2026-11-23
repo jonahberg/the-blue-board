@@ -1,6 +1,6 @@
 {
  "name": "planned-only-watch",
- "description": "Evening watch: no program in effect anywhere, but the FAA operations plan says ground stops or delay programs are possible at Newark until 9:00 PM ET and at San Francisco after 4:00 PM PT. Expected tone: watch.",
+ "description": "An evening with no program in effect anywhere (a watch until Nov 22 2026, calm since: a possible program never sets the tone), but the FAA operations plan says ground stops or delay programs are possible at Newark until 9:00 PM ET and at San Francisco after 4:00 PM PT. Expected tone: watch.",
  "nowIso": "2026-11-10T23:10:00Z",
  "sources": {
   "irops": {
@@ -415,6 +415,6 @@
   }
  },
  "expect": {
-  "tone": "watch"
+  "tone": "calm"
  }
 }

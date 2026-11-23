@@ -1,6 +1,6 @@
 {
  "name": "unconfirmed-cancellations",
- "description": "A day like Sep 30 - Oct 2 2026: 162 departures marked \"likely canceled\" by the schedule provider (131 of its marked flights were seen flying), only 6 confirmed. Hubs 82-93% on time; the disruption index reads 21.4 (minor band) because unconfirmed rows still count x3. Expected tone: watch (network status \"Some Delays\"), and the brief must not call the unconfirmed rows cancellations.",
+ "description": "A day like Sep 30 - Oct 2 2026: 162 departures marked \"likely canceled\" by the schedule provider (131 of its marked flights were seen flying), only 6 confirmed. Hubs 82-93% on time; the disruption index reads 21.4 (minor band) because unconfirmed rows still count x3. Expected tone: calm since Nov 22 2026 (it was watch, network status \"Some Delays\", from the index in its minor band, which never sets the tone alone now), and the brief must not call the unconfirmed rows cancellations.",
  "nowIso": "2026-10-01T19:30:00Z",
  "sources": {
   "irops": {
@@ -388,6 +388,6 @@
   }
  },
  "expect": {
-  "tone": "watch"
+  "tone": "calm"
  }
 }

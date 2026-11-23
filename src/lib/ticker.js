@@ -13,7 +13,9 @@
  * Build the ticker's item list, in render order.
  *
  * @param {Object} input
- * @param {{level: string, text: string}} input.opsHealth  from deriveOpsHealth().
+ * @param {{level: string, text: string, note?: string}} input.opsHealth  from deriveOpsHealth(). At
+ *   "Smooth Ops" with one hub impaired, `note` names that hub's trouble, and the default line says
+ *   it with "other hubs normal" instead of "All systems normal" (Nov 22 2026).
  * @param {number} input.airborne  airborne flight count.
  * @param {number} input.total  total flights in the feed (gates the count lines).
  * @param {number} input.fleetCount  FLEET_DB length; 0 until the fleet loads.
@@ -55,6 +57,9 @@ export function buildTickerItems({ opsHealth, airborne, total, fleetCount, starl
   if (items.length === 0 || items.every(i => i.cls === 'info')) {
     const countStr = total > 0 ? ` — tracking ${total} United flights` : '';
     if (faaUnknown) items.unshift({ text: `${faaUnknown}${countStr}`, cls: 'unknown' });
+    // One hub's trouble is not a network advisory (ops-health.js), but "all systems normal" beside
+    // a hub's delay program would not be true: a plain line names it and says the rest are normal.
+    else if (opsHealth?.note) items.unshift({ text: `${opsHealth.note}; other hubs normal${countStr}`, cls: 'info' });
     else items.unshift({ text: `✅ All systems normal${countStr}`, cls: 'info' });
   }
 

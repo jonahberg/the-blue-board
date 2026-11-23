@@ -55,7 +55,12 @@ const activeLinkClass = `${linkBase} font-medium text-foreground bg-accent`;
         </svg>
       </span>
       <span class="leading-tight">
-        <span class="block text-sm font-semibold text-foreground">The Blue Board</span>
+        {/* `data-turkey-wordmark`: on Thanksgiving (or with ?gobble=1) the script below puts the
+            turkey's clipping box inside this span, its left edge on the words' right edge
+            (src/scripts/turkey-egg.ts). Nothing is added on any other day. */}
+        <span class="block text-sm font-semibold text-foreground"
+          ><span class="relative inline-block" data-turkey-wordmark>The Blue Board</span></span
+        >
         <span class="hidden text-[11px] text-muted-foreground sm:block">
           Unofficial United Airlines ops dashboard
         </span>
@@ -136,8 +141,10 @@ const activeLinkClass = `${linkBase} font-medium text-foreground bg-accent`;
 
 <script>
   import { wireSiteMenu } from './site-menu';
+  import { mountTurkeysOnPage } from '../../scripts/turkey-egg';
 
   for (const menu of document.querySelectorAll<HTMLDetailsElement>('details[data-site-menu]')) {
     wireSiteMenu(menu);
   }
+  mountTurkeysOnPage();
 </script>

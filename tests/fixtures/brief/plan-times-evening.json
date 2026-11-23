@@ -1,6 +1,6 @@
 {
  "name": "plan-times-evening",
- "description": "8:20 PM ET (01:20Z Nov 12), the FAA's Nov 12 plan: a possible ground delay program for flights into San Francisco until 9:00 PM PT (later today: no day word), a probable ground stop or delay program for flights into Newark after 10:00 AM ET (tomorrow: \"tomorrow after 10:00 AM ET\"), a possible ground stop for flights into Denver until 5:30 PM MT (ended 50 minutes ago: not sent). In effect: a ground delay program for flights into Boston until 12:30 AM ET (past local midnight, tonight: no day word) and one for flights into New York LaGuardia whose listed end, 7:59 PM ET, has passed (not sent). Hubs healthy, index normal. Expected tone: watch, from the possible programs at San Francisco and Newark.",
+ "description": "8:20 PM ET (01:20Z Nov 12), the FAA's Nov 12 plan: a possible ground delay program for flights into San Francisco until 9:00 PM PT (later today: no day word), a probable ground stop or delay program for flights into Newark after 10:00 AM ET (tomorrow: \"tomorrow after 10:00 AM ET\"), a possible ground stop for flights into Denver until 5:30 PM MT (ended 50 minutes ago: not sent). In effect: a ground delay program for flights into Boston until 12:30 AM ET (past local midnight, tonight: no day word) and one for flights into New York LaGuardia whose listed end, 7:59 PM ET, has passed (not sent). Hubs healthy, index normal. Expected tone: calm since Nov 22 2026 (it was watch, from the possible program at San Francisco; a possible program never sets the tone now).",
  "nowIso": "2026-11-12T01:20:00Z",
  "sources": {
   "irops": {
@@ -641,6 +641,6 @@
   }
  },
  "expect": {
-  "tone": "watch"
+  "tone": "calm"
  }
 }

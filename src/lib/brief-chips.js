@@ -153,9 +153,9 @@ export function chipLabel(fact) {
 /**
  * How the chip is coloured. Radio is info-blue with an antenna icon (never Starlink violet: that
  * token means Starlink). A ground stop or closure at a hub is red ('alert'); a ground delay
- * program at a hub is amber ('warn'), as the hub strip marks it and as the brief's own tone reads
- * ("Watch") when it is the only one. The label already says which program, so colour is never the
- * only signal. Everything else is plain.
+ * program at a hub is amber ('warn'), as the hub strip marks that hub's own chip, even on a calm
+ * brief (since Nov 22 2026 one hub's program alone leaves the brief calm). The label already says
+ * which program, so colour is never the only signal. Everything else is plain.
  * @param {PublicFact} fact
  * @returns {ChipTone}
  */

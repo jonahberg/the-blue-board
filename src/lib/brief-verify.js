@@ -19,8 +19,9 @@
 //      or altered quote, or an unattributed one drops the item. Markup or a URL drops any item.
 //   5. The headline is checked against the union of the SURVIVING items' facts. A headline that
 //      fails (or runs past 14 words, or says the operation is calm, smooth, quiet or "running
-//      normally" while the computed tone is not calm) is replaced with the template headline,
-//      never published. Past 12 words (prompt rule 3) it is kept with a warning.
+//      normally" while the computed tone is not calm, or on a calm day with one hub impaired does
+//      not name that hub, or calls the operation calm before naming it) is replaced with the
+//      template headline, never published. Past 12 words (prompt rule 3) it is kept with a warning.
 //   6. The traveler note is checked like an item, and only survives when an FAA ground stop or
 //      ground delay program is in effect at a United hub, or the final tone is "disrupted"
 //      (travelerNoteAllowed).
@@ -30,7 +31,8 @@
 
 import { BRIEF_HUBS, airportForms, allowanceFromValues, claimFailure, emptyAllowance, extractClaims, normalizeText } from './brief-claims.js';
 import {
-  allHubsHealthy, computeTone, isAirborneShortfallFact, isNonHubProgramFact, programAirport, travelerNoteAllowed,
+  allHubsHealthy, computeTone, hubsWithProblems, impairedHubs, isAirborneShortfallFact, isNonHubProgramFact, programAirport,
+  travelerNoteAllowed,
 } from './brief-facts.js';
 import { ON_TIME_GRACE_MIN } from './hub-health.js';
 import { buildTemplateBrief, templateHeadline } from './brief-template.js';
@@ -57,30 +59,17 @@ const MARKUP_RE = /<[^>]{0,200}>|<\/?[a-z]|[a-z][a-z0-9+.-]*:\/\/|\bwww\./i;
 const CALM_HEADLINE_RE = /\b(?:calm|calmly|smooth|smoothly|quiet|quietly)\b|\b(?:running|run|runs|operating|operate|operates)\s+normally\b|\bhubs?,?\s+(?:which\s+)?(?:are|is|look|looks|remain|remains|stay|stays|seem|seems)\s+(?:running\s+|operating\s+)?(?:steady|fine|normal|ok|okay|on\s+track)\b/i;
 /** "the other hubs are running normally": the rest of the hubs, after the problem has been named. */
 const OTHER_HUBS_NORMAL_RE = /\b(?:the\s+)?(?:other|remaining)\s+(?:United\s+)?hubs,?\s+(?:which\s+)?(?:are|look|remain|stay|run|seem)\s+(?:running\s+|operating\s+)?(?:normally|normal|smoothly|calm|steady|fine)\b/gi;
-/**
- * Hubs with a problem a headline must name before it may call the others normal: an on-time figure
- * under 80% (a hub's own fact with a material reading) or trailing the others (an outlier), an FAA
- * program in effect there, or weather at warning level or worse. A possible program is not one.
- * @param {Array<import('./brief-facts.js').BriefFact>} facts
- * @returns {string[]}
- */
-function hubsWithProblems(facts) {
-  const hubs = new Set();
-  for (const f of facts) {
-    if (!f.hub) continue;
-    if (/^otp\.[A-Z]{3}$/.test(f.id) && (f.material !== null || f.outlier === true)) hubs.add(f.hub);
-    if (/^faa\.active\.[A-Z]{3}\./.test(f.id)) hubs.add(f.hub);
-    if (/^wx\.[A-Z]{3}$/.test(f.id) && f.toneFloor !== 'calm') hubs.add(f.hub);
-  }
-  return [...hubs];
-}
 /** True when the text names this airport by any of its forms. */
 function namesAirport(text, code) {
   return extractClaims(text).some((c) => c.type === 'airport' && c.codes.includes(code));
 }
 /** Words that say how United's operation is doing, which a headline must lead with (see below). */
 const CONDITION_RE = /\b(?:United|United's|hubs?|calm|calmly|smooth|smoothly|quiet|quietly|normal|normally)\b/i;
-/** Words naming a ground stop or delay program. On a calm day none is at a hub (computeTone). */
+/**
+ * Words naming a ground stop or delay program. On a calm day with no hub problem none is at a hub;
+ * since Nov 22 2026 one hub's delay program can be in effect on a calm day (computeTone), so then
+ * only the airports away from the hubs count (nonHubLeadReason).
+ */
 const PROGRAM_WORDS_RE = /\b(?:ground\s+stops?|ground\s+delays?|delay\s+programs?|FAA\s+programs?|programs?|delays?|holding|held)\b/i;
 
 /** Words that put a headline in the future: a possible program, tomorrow. */
@@ -154,9 +143,12 @@ const NOTE_WRONG_DIRECTION_RE = /\b(?:out\s+of|to\s+or\s+from|into\s+or\s+out\s+
 /**
  * Why a headline leads with a stop or delay program at an airport that is not a United hub, or null
  * (Nov 2026: "Ground delays are holding flights into Seattle; hubs look normal." on a day the
- * header read "Smooth Ops"). It leads with one when the program's airport, or on a calm day any
- * program wording (no hub has one then), comes before anything about United's own condition:
- * "United", the hubs, a calm word or a hub's name. The mirror of headline:calm_when_not_calm.
+ * header read "Smooth Ops"). It leads with one when the program's airport, or on a calm day with
+ * no hub FAA program and no hub impaired any program wording, comes before anything about United's
+ * own condition: "United", the hubs, a calm word or a hub's name. The mirror of
+ * headline:calm_when_not_calm. On a calm day with one hub's delay program, FAA delays or another
+ * impairment (Nov 22 2026) a program word may be about that hub, so only the names of the airports
+ * away from the hubs count.
  * @param {string} headline  normalized
  * @param {'calm'|'watch'|'disrupted'} tone
  * @param {Array<import('./brief-facts.js').BriefFact>} facts
@@ -169,10 +161,45 @@ export function nonHubLeadReason(headline, tone, facts) {
   const nameRe = (names) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${names.map((n) => normalizeText(n).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![\\p{L}\\p{N}])`, 'u');
   const awayNames = [...new Set(away.flatMap((f) => airportForms(programAirport(f))))];
   const hubNames = [...new Set(BRIEF_HUBS.flatMap((h) => airportForms(h)))];
-  const programAt = Math.min(firstIndex(nameRe(awayNames)), tone === 'calm' ? firstIndex(PROGRAM_WORDS_RE) : Infinity);
+  // Program words count on a calm day only while no hub has an FAA program or delays in effect and
+  // none is impaired: then a word like "delays" may be about that hub.
+  const hubTrouble = impairedHubs(facts).length > 0 || facts.some((f) => f.hub && /^faa\.active\.[A-Z]{3}\./.test(f.id));
+  const wordsCount = tone === 'calm' && !hubTrouble;
+  const programAt = Math.min(firstIndex(nameRe(awayNames)), wordsCount ? firstIndex(PROGRAM_WORDS_RE) : Infinity);
   if (programAt === Infinity) return null;
   const conditionAt = Math.min(firstIndex(CONDITION_RE), firstIndex(nameRe(hubNames)));
   return programAt < conditionAt ? 'headline:leads_with_non_hub_program' : null;
+}
+
+/**
+ * Why a calm headline misses the one impaired hub, or null (Nov 22 2026). With one hub impaired (a
+ * delay program, under 70% on time today, FAA delays of 45 minutes or more, 10% of today's
+ * departures canceled) the brief is calm, and its headline must name that hub
+ * (`headline:misses_impaired_hub`) and must not call United or the hubs calm, smooth or "running
+ * normally" before it does (`headline:calm_before_impaired_hub`), nor say "the other hubs are running
+ * normally" while another hub with something to name goes unnamed (`headline:other_hubs_not_normal`,
+ * hubsWithProblems): after naming it, that is the shape the owner liked ("Newark is lagging under low clouds; the
+ * other hubs are running normally."). A calm brief is never forced into "United is running normally"
+ * while Newark has a 105-minute delay program.
+ * @param {string} headline  normalized
+ * @param {'calm'|'watch'|'disrupted'} tone
+ * @param {Array<import('./brief-facts.js').BriefFact>} facts
+ * @returns {string|null}
+ */
+export function impairedHubLeadReason(headline, tone, facts) {
+  if (tone !== 'calm') return null;
+  const [hub] = impairedHubs(facts);
+  if (!hub) return null;
+  if (!namesAirport(headline, hub)) return 'headline:misses_impaired_hub';
+  // "the other hubs are running normally" holds only once every hub with something to name (an
+  // impaired hub, a hub under 80%, FAA delays, warning weather, cancellations at 5%) is named first.
+  const problems = [...new Set([hub, ...hubsWithProblems(facts)])];
+  const calmRead = headline.replace(OTHER_HUBS_NORMAL_RE, (m, offset) => (
+    offset > 0 && problems.every((h) => namesAirport(headline.slice(0, offset), h)) ? '' : m));
+  if (!CALM_HEADLINE_RE.test(calmRead)) return null;
+  // The only calm wording is "the other hubs…", and another hub with a problem goes unnamed.
+  const withoutOthers = headline.replace(OTHER_HUBS_NORMAL_RE, '');
+  return CALM_HEADLINE_RE.test(withoutOthers) ? 'headline:calm_before_impaired_hub' : 'headline:other_hubs_not_normal';
 }
 
 /**
@@ -464,10 +491,15 @@ const FEWER_FLYING_HEADLINE_RE = /\bfewer\b.*\b(?:flights?|in the air|airborne|a
 /** "Far fewer" is the disrupted headline: with a lighter schedule at watch, the count is not that far short. */
 const FAR_FEWER_HEADLINE_RE = /\bfar\s+fewer\b/i;
 
-/** Headlines that claim nothing, for when even the template's headline fails its checks. */
+/**
+ * Headlines that claim nothing, for when even the template's headline fails its checks. "Watch" is
+ * network-wide (Nov 22 2026), so its line no longer says "mostly normal"; a calm day with one hub
+ * impaired gets a line that does not call the whole operation smooth.
+ */
 const FALLBACK_HEADLINE = Object.freeze({
   calm: 'United is running smoothly right now.',
-  watch: 'United is mostly normal right now.',
+  calmImpaired: 'Most United hubs are running normally right now.',
+  watch: "Delays are up across United's network right now.",
   disrupted: "United's operation is disrupted right now.",
 });
 
@@ -613,6 +645,9 @@ export function verifyBrief(candidate, facts) {
     // Nor, on a calm night, something only possible tomorrow (Nov 12 2026).
     const laterLead = tomorrowLeadReason(text, tone, factList);
     if (laterLead) reasons.push(laterLead);
+    // On a calm day with one hub impaired, that hub is named, and nothing calls the day calm first.
+    const impairedLead = impairedHubLeadReason(text, tone, factList);
+    if (impairedLead) reasons.push(impairedLead);
     // With far fewer flights in the air than usual, the headline is about that, not one airport.
     if (shortfall && !NETWORK_SHORTFALL_HEADLINE_RE.test(text)) reasons.push('headline:misses_network_shortfall');
     if (inLineWithSchedule && FEWER_FLYING_HEADLINE_RE.test(text)) reasons.push('headline:fewer_in_line_with_schedule');
@@ -630,7 +665,7 @@ export function verifyBrief(candidate, facts) {
     if (replacementReasons.length) {
       report.headline.fallback = replacementReasons;
       report.rewritesRejected += 1;
-      headline = FALLBACK_HEADLINE[tone];
+      headline = tone === 'calm' && impairedHubs(factList).length ? FALLBACK_HEADLINE.calmImpaired : FALLBACK_HEADLINE[tone];
     } else {
       headline = replacement.headline;
       headlineFactIds = replacement.fact_ids;

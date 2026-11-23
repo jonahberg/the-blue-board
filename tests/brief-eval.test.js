@@ -53,7 +53,9 @@ describe('brief-eval --check', () => {
     const out = JSON.parse(run('--check', 'sfo-gdp-morning', file, '--json'));
     expect(out.fixture).toBe('sfo-gdp-morning');
     expect(out.final).toEqual(expect.objectContaining({ source: 'model', templateReason: null }));
-    expect(out.final.brief.tone).toBe('watch');
+    // One hub's delay program: calm since Nov 22 2026 (it was a watch); the headline names the hub.
+    expect(out.final.brief.tone).toBe('calm');
+    expect(out.report.headline.status).toBe('kept');
     expect(out.report.dropped).toEqual([expect.objectContaining({ index: 1, reasons: ["uncited_airport:Chicago O'Hare", 'number_not_in_facts:88%'] })]);
     expect(out.report.travelerNote.status).toBe('kept');
   }, 30_000);

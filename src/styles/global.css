@@ -204,6 +204,113 @@
   }
 }
 
+/* ── The Thanksgiving turkey (DESIGN.md Decisions Log, 2026-11-22) ────────────────────────────
+   An owner-requested egg, the one exception to "chrome stays quiet" and to the 300 ms motion
+   budget: on Thanksgiving by the visitor's clock (or with ?gobble=1) a small turkey lives behind
+   the header wordmark (src/lib/holiday-egg.js, played by src/scripts/turkey-egg.ts).
+
+   `.bb-turkey` is the clipping box. It sits inside the wordmark (`position: relative`) with its
+   left edge on the wordmark's right edge, and the script sets its width to the free gap to the
+   next thing in the header less 4 px. Letters are see-through, so a lower z-index would show the
+   bird through them: the box's left edge is the wall it slides out of and back behind, and its
+   right edge a hard stop short of the LIVE chip or any control. Absolutely positioned (no layout
+   shift), no pointer events, aria-hidden. Only transform and opacity animate. */
+.bb-turkey {
+  position: absolute;
+  left: 100%;
+  bottom: 1px;
+  width: 0;
+  height: 27px;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  line-height: 0;
+}
+.bb-turkey-mover {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  display: block;
+  transform: translateX(-29px);
+  transform-origin: 50% 50%;
+  transition-property: transform;
+}
+.bb-turkey-bob {
+  display: block;
+  transform-origin: 50% 100%;
+}
+.bb-turkey-svg {
+  display: block;
+}
+/* The drawing. Tokens where one fits (the gold feathers are bb-warn's amber, the wattle the
+   site's red), plain warm fills where none does: a turkey is decoration, not a status. */
+.bb-turkey .tk-f1 { fill: oklch(0.55 0.16 35); }
+.bb-turkey .tk-f2 { fill: oklch(0.7 0.17 55); }
+.bb-turkey .tk-f3 { fill: var(--color-bb-warn); }
+.bb-turkey .tk-tip { fill: oklch(0.9 0.06 85); }
+.bb-turkey .tk-body,
+.bb-turkey .tk-neck { fill: oklch(0.53 0.09 50); }
+.bb-turkey .tk-wing { fill: oklch(0.42 0.07 45); }
+.bb-turkey .tk-head { fill: oklch(0.82 0.05 60); }
+.bb-turkey .tk-eye { fill: oklch(0.15 0 0); }
+.bb-turkey .tk-beak { fill: oklch(0.78 0.16 65); }
+.bb-turkey .tk-wattle { fill: var(--destructive); }
+.bb-turkey .tk-leg path {
+  fill: none;
+  stroke: oklch(0.78 0.14 65);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.bb-turkey .tk-leg {
+  transform-box: fill-box;
+  transform-origin: 50% 0;
+}
+/* Running: the legs alternate and the body waddles. */
+.bb-turkey[data-pose='run'] .tk-leg-a {
+  animation: bb-turkey-stride 0.2s ease-in-out infinite alternate;
+}
+.bb-turkey[data-pose='run'] .tk-leg-b {
+  animation: bb-turkey-stride 0.2s ease-in-out infinite alternate-reverse;
+}
+.bb-turkey[data-pose='run'] .bb-turkey-bob {
+  animation: bb-turkey-waddle 0.4s ease-in-out infinite alternate;
+}
+/* Peeking: a look about. At the far end, after turning: one small hop. */
+.bb-turkey[data-pose='look'] .bb-turkey-bob {
+  animation: bb-turkey-look 0.9s ease-in-out;
+}
+.bb-turkey[data-pose='hop'] .bb-turkey-bob {
+  animation: bb-turkey-hop 0.45s ease-out;
+}
+@keyframes bb-turkey-stride {
+  from { transform: rotate(24deg); }
+  to { transform: rotate(-24deg); }
+}
+@keyframes bb-turkey-waddle {
+  from { transform: translateY(0) rotate(-5deg); }
+  50% { transform: translateY(-1.5px) rotate(0deg); }
+  to { transform: translateY(0) rotate(5deg); }
+}
+@keyframes bb-turkey-look {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(-9deg); }
+  65% { transform: rotate(6deg); }
+}
+@keyframes bb-turkey-hop {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-3px); }
+}
+/* Reduced motion: the script plays nothing and leaves the head peeking, still; nothing here may
+   move either, even for 0.01 ms. */
+@media (prefers-reduced-motion: reduce) {
+  .bb-turkey *,
+  .bb-turkey-mover {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
 /* ── Leaflet integration ──────────────────────────────────────────────────────
    Leaflet ships its own stylesheet from npm and the React island will import it
    as a separate CSS chunk, so these overrides must beat it on SPECIFICITY, not
