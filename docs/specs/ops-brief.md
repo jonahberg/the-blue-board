@@ -23,7 +23,7 @@ Written from 21 live facts and checked against them.
 | collect | `api/_brief-collect.ts` | The site's own CDN-cached endpoints and one `airborne_samples` read, plus, only when the count in the air is 25% or more below usual, eight `flight_history` counts of the day's schedule. See [Zero new upstream spend](#zero-new-upstream-spend). |
 | facts | `src/lib/brief-facts.js` | Payloads in, facts out. Pure; `nowMs` is passed in. |
 | gate | cron | Nothing is published unless **both** `/api/irops` and `/api/faa` answered **and** at least 3 hubs have an on-time figure (`BRIEF_MIN_HUB_READINGS`, counted from `collection.hubReadings`, not from the facts: on a healthy day most hubs' own facts are not sent). A calm brief written without the FAA picture, or without on-time evidence, would be a lie. |
-| skip | cron | sha256 of the jitter-rounded material facts. Same hash as the latest brief **and** that brief is under 60 min old → no new brief; the run stamps `checked_at` and stops. |
+| skip | cron | sha256 of the jitter-rounded material facts. Same hash as the latest brief **and** that brief is under 60 min old **and** its stored tone is still the computed one → no new brief; the run stamps `checked_at` and stops. |
 | generate | `api/_brief-model.ts` + `src/lib/brief-prompt.js` | Claude Haiku 5.5 through the Vercel AI Gateway, after the brief's own daily spend cap says yes. |
 | verify | `src/lib/brief-verify.js` | Every claim checked against the cited facts. Failing items dropped. |
 | fallback | `src/lib/brief-template.js` | Invalid JSON, a failed call, the cap, a switch, or no surviving item → the template brief, `source: 'template'`. |
@@ -346,8 +346,11 @@ possible program at a hub, hub weather reaching warning, a weather level or haza
 crossing still change it.
 
 A run whose hash equals the latest brief's, with that brief under 60 minutes old, writes nothing but
-`checked_at`. Exception: when the latest is a template caused by a transient model failure
-(`model_error`, `model_timeout`, `model_rate_limited`), the next run retries.
+`checked_at`. Exceptions: when the latest is a template caused by a transient model failure
+(`model_error`, `model_timeout`, `model_rate_limited`), the next run retries; and when the latest's
+stored tone is not the tone these facts compute (the tone is a function of the material facts, so
+this happens only after the tone rule changed in a deploy, as on Nov 22 2026), the run writes a new
+brief at once instead of reusing the old one for up to an hour.
 
 Measured before v1.25.1 on the real Nov 9–10 2026 `airborne_samples` day (144 ten-minute runs, 151
 to 726 in the air): the airborne count alone would have started 35 new briefs a day at 100-flight

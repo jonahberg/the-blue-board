@@ -36,7 +36,7 @@ export type BriefRow = {
 };
 
 /** The latest-row columns the cron needs for change detection. */
-export type LatestBriefMeta = Pick<BriefRow, 'id' | 'generated_at' | 'checked_at' | 'facts_hash' | 'source' | 'template_reason'>;
+export type LatestBriefMeta = Pick<BriefRow, 'id' | 'generated_at' | 'checked_at' | 'facts_hash' | 'source' | 'template_reason' | 'tone'>;
 
 let warnedMissingTable = false;
 

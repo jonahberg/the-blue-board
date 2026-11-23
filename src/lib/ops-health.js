@@ -52,7 +52,7 @@ import { normalizeFaaType } from './faa-context.js';
 
 /**
  * With exactly one United hub impaired, the network is "Some Delays" only when the IROPS index is
- * at least this (owner-decided Nov 22 2026). The index alone sits in its minor band (20–40) for most
+ * at least this (decided with the rule, Nov 22 2026). The index alone sits in its minor band (20–40) for most
  * of an ordinary evening and night: ordinary full-day scores ran 24–33 and bad days 51–82 over
  * Nov 12–22 2026, and the minor band held the brief at watch in 260 briefs since Nov 12. Replaying
  * the stored facts of every brief of Nov 12–22 2026 through this rule, the share of each day's hours
@@ -62,7 +62,7 @@ export const NETWORK_WATCH_INDEX_WITH_ONE_HUB = 30;
 
 /**
  * FAA departure or arrival delays impair a hub only when their reported lower bound is at least
- * this many minutes (owner-decided Nov 22 2026). Since Nov 12 2026 FAA departure delays at a hub had
+ * this many minutes (decided with the rule, Nov 22 2026). Since Nov 12 2026 FAA departure delays at a hub had
  * held the brief at watch in 110 briefs and arrival delays in 5, whatever their length.
  */
 export const HUB_IMPAIRING_FAA_DELAY_MIN = 45;
