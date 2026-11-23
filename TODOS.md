@@ -68,23 +68,43 @@ Open work, checked against the code on 2026-11-10. Each entry names the file it 
 
 ## Hardening
 
-- [ ] **DEP0169 log noise — shipped, confirm in production logs.** Since Nov 10 2026 every
-  handler reads its query through `getQuery(req)` (`api/_query.ts`), which parses `req.url` with
-  `new URL()` and never touches the runtime's lazy `req.query`; `tests/query.test.js` fails if a
-  file under `api/` reads `req.query` again. Tick this once a week of production logs shows no
-  DEP0169 lines. About 4,700 `url.parse()` deprecation warnings a week, at most one
-  per process. They appear only on the routes whose handlers read `req.query`, including
-  `/api/metar`, which loads no packages; routes that never read it (`/api/irops`, the crons) log
-  none. App code never calls `url.parse`, so the likely caller is the platform's `req.query`
-  helper. `NODE_OPTIONS=--trace-deprecation` on a Preview deploy would confirm it, and
-  `NODE_OPTIONS=--disable-warning=DEP0169` would silence it (and any future first-party
-  `url.parse` call).
+- [x] **DEP0169 log noise.** Fixed Nov 10 2026, confirmed Nov 23 2026: every handler reads its
+  query through `getQuery(req)` (`api/_query.ts`), which parses `req.url` with `new URL()` and
+  never touches the runtime's lazy `req.query`; `tests/query.test.js` fails if a file under `api/`
+  reads `req.query` again. A full-text search of production runtime logs for `DEP0169` and
+  `DeprecationWarning` over Nov 16–23 2026 returned no records (the same search finds other known
+  strings, e.g. 13 `cost-state` lines in two days). Was: about 4,700 `url.parse()` deprecation
+  warnings a week, at most one per process, only on the routes whose handlers read `req.query`
+  (including `/api/metar`, which loads no packages); the likely caller was the platform's
+  `req.query` helper. If it returns, `NODE_OPTIONS=--disable-warning=DEP0169` silences it.
 - [ ] **CSP `style-src 'unsafe-inline'`** (`vercel.json`). Drop it after an inline-style audit;
   `script-src` already has no `'unsafe-inline'`.
-- [ ] **Spend alerting.** Nothing watches AI Gateway or FR24 credit spend. The only alert path
-  (`api/_alert.ts`) covers the schedule pipeline.
-- [ ] **Dependency audit in CI.** `.github/workflows/test.yml` runs typecheck, build and tests
-  only. There is no `bun audit` step and no Dependabot config.
+- [ ] **Spend alerting.** Checked against the code Nov 23 2026. Capped in code: the brief's model
+  call (`BRIEF_DAILY_USD_CAP`, default $0.50 a UTC day, `api/cron/brief.ts`) and Ask's
+  (`ASK_DAILY_USD_CAP`, default $0.50, `api/ask.ts`), both counted across instances in
+  `feature_spend_daily` (`sql/022`) and closed when it cannot be read; Enhanced Radar radio status
+  (`ENHANCED_RADAR_DAILY_USD_CAP` / `ENHANCED_RADAR_MONTHLY_USD_CAP`, defaults $12 and $100,
+  `api/_radio-status.ts`, booked in its ledger before each call); AeroDataBox
+  (`AERODATABOX_DAILY_UNIT_BUDGET`, default 400 units, `api/_cost-state.ts`, across instances via
+  `sql/009`, per instance when Supabase fails); the FR24 official API
+  (`OFFICIAL_FR24_DAILY_CALL_CAP`, default 200 calls a UTC day, per instance, checked only by
+  `api/schedule.ts`). Not capped by spend: delay explain (`api/delay-explain.ts`, an AI Gateway
+  call bounded per request and per IP: 160 output tokens, 20 requests a minute, a 5-minute cache,
+  a 5-minute pause after a gateway 402) and the official FR24 calls from `/api/fr24-flight`,
+  `/api/flight-times` and `/api/aircraft-history` (rate limits and the shared 402 block only). Alerted: only AeroDataBox, at 80% of its budget,
+  through the warm cron's pipeline alert (`api/cron/warm-schedules.ts` → `api/_alert.ts`, when
+  `ALERT_WEBHOOK_URL` is set). A tripped brief, Ask or radio cap, an FR24 or gateway 402, and
+  delay explain's spend show only in function logs.
+- [ ] **Dependency audit in CI.** Checked Nov 23 2026. On, in the repository's settings:
+  Dependabot alerts, Dependabot security updates, and CodeQL default setup (weekly and on pull
+  requests, the "Analyze (javascript-typescript)" checks). Missing: a `.github/dependabot.yml` (no
+  version updates) and an audit step: `.github/workflows/test.yml` runs typecheck, build and tests
+  only. Dependabot shows no open alerts, but the dependency graph lists 46 entries, the
+  `package.json` ranges, not the packages `bun.lock` resolves. `bun audit` (Bun 1.4.5; CI pins
+  1.3.14) exits 1 on this lockfile: 29 advisories (7 high, 15 moderate, 7 low), 18 of them undici
+  through `@vercel/node`, jsdom, astro and shadcn; 5 with `--prod` (astro 7.3.8, fast-xml-parser
+  5.11.2, fflate via satori, minimatch via `@vercel/nft` and ts-morph). Fix or `--ignore` them
+  before adding `bun audit` to CI, or the step fails every run.
 - [ ] **Secrets rotation.** No written procedure for rotating `SUPABASE_SERVICE_ROLE_KEY`,
   `RESEND_API_KEY`, `AI_GATEWAY_API_KEY`, `FR24_API_TOKEN`, `AERODATABOX_API_KEY`, `CRON_SECRET`
   and the VAPID keys.
