@@ -116,10 +116,13 @@ Open work, checked against the code on 2026-11-10. Each entry names the file it 
 - [ ] **Integration tests against a local Supabase.** Nothing in `tests/` exercises the real
   service-role and anon clients, or checks that RLS is enforced. Every table has RLS enabled in
   `sql/`.
-- [ ] **Focus return when the opener unmounts.** Opening the ⌘K palette, then the flight sheet,
-  then closing it leaves focus on `<body>`. `shouldRestoreFocus` (`src/lib/focus-return.js`)
-  gives up on a detached opener. Fall back to the "Find a flight" trigger, and drop or reword
-  the `insideClosingContent` clause in `wasFocusLost`.
+- [x] **Focus return when the opener unmounts.** Fixed Nov 23 2026: when an overlay's opener has
+  left the document, the dialog and sheet wrappers give focus to the header's "Find a flight"
+  button (`focusReturnTarget` and `FOCUS_FALLBACK_ATTR` in `src/lib/focus-return.js`); an overlay
+  opened with nothing focused still restores nothing. The `insideClosingContent` clause is gone:
+  Radix runs the close handler after the content has unmounted, so it could never be true
+  (`tests/focus-return.test.js`, `tests/focus-return-palette.test.tsx`). Was: opening the ⌘K
+  palette, then the flight sheet, then closing it left focus on `<body>`.
 - [x] **Engagement provider lifecycle.** Covered Nov 23 2026 (`tests/engagement-store.test.tsx`):
   the threshold read before the visit is recorded, init once per page, fail-closed stores; a
   subscriber re-rendered only by a real change, one click listener, removed on reset; the waitlist

@@ -5,7 +5,11 @@ import { cn } from "cn"
 import { Dialog as SheetPrimitive } from "radix-ui"
 
 import { Button } from "@/components/ui/button"
-import { shouldRestoreFocus, wasFocusLost } from "@/lib/focus-return.js"
+import {
+  FOCUS_FALLBACK_ATTR,
+  focusReturnTarget,
+  wasFocusLost,
+} from "@/lib/focus-return.js"
 import { XIcon } from "lucide-react"
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
@@ -90,16 +94,6 @@ function SheetContent({
   // `<body>` when they close. Remembering the opener here covers every caller at once.
   const openerRef = React.useRef<HTMLElement | null>(null)
 
-  const contentRef = React.useRef<HTMLDivElement | null>(null)
-  const composedRef = React.useCallback(
-    (node: HTMLDivElement | null) => {
-      contentRef.current = node
-      if (typeof ref === "function") ref(node)
-      else if (ref) (ref as React.RefObject<HTMLDivElement | null>).current = node
-    },
-    [ref]
-  )
-
   const handleCloseAutoFocus = React.useCallback(
     (event: Event) => {
       // The caller's handler wins — `ScheduleControls` restores focus itself and prevents
@@ -107,20 +101,19 @@ function SheetContent({
       onCloseAutoFocus?.(event)
       if (event.defaultPrevented) return
 
-      const active = document.activeElement as HTMLElement | null
-      const content = contentRef.current
-      const opener = openerRef.current
       // The non-modal case is the one to get right: the flight panel closed by clicking the
       // map leaves focus on the Leaflet container, and `wasFocusLost` says no — so the user
-      // keeps the focus they just moved.
-      const lost = wasFocusLost({
-        activeElement: active,
-        insideClosingContent: Boolean(content && active && content.contains(active)),
+      // keeps the focus they just moved. Opened from ⌘K, the opener (the palette's input) is
+      // gone by now, and focus goes to the "Find a flight" button instead.
+      const target = focusReturnTarget({
+        opener: openerRef.current,
+        fallback: document.querySelector<HTMLElement>(`[${FOCUS_FALLBACK_ATTR}]`),
+        focusWasLost: wasFocusLost({ activeElement: document.activeElement }),
       })
-      if (!shouldRestoreFocus({ opener, focusWasLost: lost })) return
+      if (!target) return
 
       event.preventDefault()
-      opener?.focus?.()
+      target.focus?.()
     },
     [onCloseAutoFocus]
   )
@@ -131,7 +124,7 @@ function SheetContent({
       <SheetPrimitive.Content
         data-slot="sheet-content"
         data-side={side}
-        ref={composedRef}
+        ref={ref}
         onCloseAutoFocus={handleCloseAutoFocus}
         className={cn(
           "fixed z-50 flex flex-col gap-4 bg-popover bg-clip-padding text-sm text-popover-foreground shadow-lg transition duration-200 ease-in-out data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-[side=bottom]:data-open:slide-in-from-bottom-10 data-[side=left]:data-open:slide-in-from-left-10 data-[side=right]:data-open:slide-in-from-right-10 data-[side=top]:data-open:slide-in-from-top-10 data-closed:animate-out data-closed:fade-out-0 data-[side=bottom]:data-closed:slide-out-to-bottom-10 data-[side=left]:data-closed:slide-out-to-left-10 data-[side=right]:data-closed:slide-out-to-right-10 data-[side=top]:data-closed:slide-out-to-top-10",
