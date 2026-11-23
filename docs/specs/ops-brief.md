@@ -102,8 +102,9 @@ would drop most of them. Since Nov 22 2026 these are the gates of the **network 
 sides (`networkReadings` in `src/lib/hub-health.js`): the strip's network chip and the fallback ticker
 count only the server's `/api/irops` readings with 25+ departed on a board no more than 3 h behind,
 never a visitor's own loaded boards, so it reads the brief's level (each hub's own chip still shows
-its figure from 5 departed). With no `/api/irops` answer there are no gated readings and the network
-chip waits. "Behind" is the board's **coverage gap** (`boardCoverageGapSec`,
+its figure from 5 departed). With no `/api/irops` answer there are no gated readings: the network
+chip does not say "Smooth Ops" without them, and still shows a hub ground stop or two hubs' delay
+programs from the FAA picture alone (`networkLabel`). "Behind" is the board's **coverage gap** (`boardCoverageGapSec`,
 `src/lib/hub-health.js`, carried on `/api/irops` as `coverageGapSec` with `boardDayEndSec`): the part
 of the board's own day that passed after it was built. For today's board that is its age. Before 6 AM
 local a hub's board is still yesterday's, and its statement says "yesterday". Which day a board is

@@ -77,7 +77,7 @@ export function HubHealthStrip() {
   // cannot read "Smooth Ops" beside a ground stop (F5/F33/F68), and one hub's delay program alone
   // keeps it at "Smooth Ops" as it keeps the brief calm. Each hub's chip below keeps its own figure.
   const networkIn = networkInputs({ hubMetrics, faaIndex, iropsScore: irops.score, nowMs, hubCodes: HUB_ORDER });
-  const network = networkLabel(networkIn.hubOtps, networkIn) as { avg: number; label: string; severity: Severity; level: string } | null;
+  const network = networkLabel(networkIn.hubOtps, networkIn) as { avg: number | null; label: string; severity: Severity; level: string } | null;
   // A stale FAA answer empties faaIndex, which reads exactly like a calm day. When nothing else
   // says the network is disrupted, the chip says the FAA picture is unknown instead of "Smooth
   // Ops". The time is held from the moment it went stale, so this polite region changes its words

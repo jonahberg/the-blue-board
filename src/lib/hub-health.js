@@ -502,14 +502,18 @@ export function hubHealthSeverity(pct) {
  * @param {Record<string, number>} hubOtps  on-time reading per hub code.
  * @param {{iropsScore?: number|string|null, faaIndex?: object, hubCodes?: string[],
  *   hubDayOffsets?: Record<string, number>, hubCancelRates?: Record<string, number>}} [signals]
- * @returns {{avg: number, label: string, color: string, severity: 'green'|'amber'|'red',
- *   level: 'normal'|'minor'|'significant'}|null} null when no hub has a reading.
+ * @returns {{avg: number|null, label: string, color: string, severity: 'green'|'amber'|'red',
+ *   level: 'normal'|'minor'|'significant'}|null} null when no hub has a reading and nothing else
+ *   says the network is anything but normal: "Smooth Ops" needs readings, a ground stop does not
+ *   (Nov 23 2026: with the readings gated to the server's, a hub ground stop during an /api/irops
+ *   outage left the chip blank; `avg` is null then).
  */
 export function networkLabel(hubOtps, { iropsScore = null, faaIndex = {}, hubCodes = HUB_ORDER, hubDayOffsets = {}, hubCancelRates = {} } = {}) {
-  if (!hubOtps || typeof hubOtps !== 'object' || Array.isArray(hubOtps) || Object.keys(hubOtps).length === 0) return null;
-  const status = networkStatus({ hubOtps, faaIndex, hubCodes, iropsScore, hubDayOffsets, hubCancelRates });
+  const keyed = hubOtps && typeof hubOtps === 'object' && !Array.isArray(hubOtps) ? hubOtps : {};
+  const status = networkStatus({ hubOtps: keyed, faaIndex, hubCodes, iropsScore, hubDayOffsets, hubCancelRates });
+  if (Object.keys(keyed).length === 0 && status.level === 'normal') return null;
   return {
-    avg: /** @type {number} */ (status.avg),
+    avg: status.avg,
     label: status.label,
     color: status.color,
     severity: status.severity,

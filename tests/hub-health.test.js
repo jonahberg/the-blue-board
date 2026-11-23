@@ -261,6 +261,13 @@ describe('networkLabel', () => {
     expect(networkLabel({})).toBeNull();
     expect(networkLabel(null)).toBeNull();
     expect(networkLabel(/** @type {any} */ ([90, 80]))).toBeNull();
+    // No readings is not "Smooth Ops", and one hub's delay program alone is still not amber.
+    expect(networkLabel({}, { faaIndex: { EWR: { groundDelay: true } }, hubCodes: ['ORD', 'EWR'] })).toBeNull();
+    // A ground stop, or two hubs' programs, light the chip without a single reading (Nov 23 2026:
+    // the network level reads only the server's gated readings, and an /api/irops outage has none).
+    expect(networkLabel({}, { faaIndex: { EWR: { groundStop: true } }, hubCodes: ['ORD', 'EWR'] })).toMatchObject({ avg: null, label: 'Disrupted', level: 'significant' });
+    expect(networkLabel({}, { faaIndex: { SFO: { groundDelay: true }, EWR: { groundDelay: true } }, hubCodes: ['SFO', 'EWR'] })).toMatchObject({ label: 'Some Delays', level: 'minor' });
+    expect(networkLabel({}, { iropsScore: 45 })).toMatchObject({ label: 'Disrupted' });
   });
 });
 
