@@ -19,8 +19,9 @@
  *     `data-support="deep-use-prompt"` counted as a `support_click` like every placement.
  *
  * Since Nov 22 2026 it may also come sooner than T1/T2 (`useSupportStripMoment`, rules in
- * src/lib/support-moment.js): two seconds after the second distinct flight opened on this page
- * load, or after 60 s on a visit that arrived from a social post. The latch is rolled at that
+ * src/lib/support-moment.js): two seconds after the second flight's panel is closed (two or
+ * more distinct flights opened on this page load, none open now), or after 60 s on a visit that
+ * arrived from a social post. The latch is rolled at that
  * moment, the same dice as ever; on a visit it picks the email ask or the email strip, nothing
  * shows early and those wait for T1/T2. Each `donate_prompt` event says which moment brought the
  * strip up: `trigger` is 'time', 'clicks', 'flights' or 'post', never a URL or a flight number.
@@ -67,9 +68,9 @@ function flightKey(selection: ReturnType<typeof useUi>['selection']): string {
 
 /**
  * Add one to this month's count each time a flight not yet opened on this page load is opened.
- * Returns how many distinct flights this page load has opened.
+ * Returns how many distinct flights this page load has opened, and whether one is open now.
  */
-function useFlightOpenCount(): number {
+function useFlightOpenCount(): { distinct: number; open: boolean } {
   const { selection } = useUi();
   const key = flightKey(selection);
   const seen = useRef(new Set<string>());
@@ -80,12 +81,12 @@ function useFlightOpenCount(): number {
     recordFlightOpen(safeLocalStorage());
     setDistinct(seen.current.size);
   }, [key]);
-  return distinct;
+  return { distinct, open: selection !== null };
 }
 
 export default function SupportStrip() {
-  const flightsThisLoad = useFlightOpenCount();
-  const trigger = useSupportStripMoment(flightsThisLoad);
+  const flights = useFlightOpenCount();
+  const trigger = useSupportStripMoment(flights.distinct, flights.open);
   const [answered, setAnswered] = useState(false);
 
   // `trigger` first: the latch is decided when a moment fires, never before.

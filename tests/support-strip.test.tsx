@@ -9,8 +9,9 @@
  *   3. the personal count: counted from flight-panel opens, deduped per page load, shown only
  *      from five up, never sent to analytics;
  *   4. quiet: inline, no live region, a plain "Dismiss", buttons outside the click counter;
- *   5. the early moments (Nov 22 2026): the second distinct flight, and 60 s after a social post,
- *      only on a visit whose latch is the strip, each reported as the event's `trigger`.
+ *   5. the early moments (Nov 22 2026): after the second flight's panel is closed, and 60 s after a
+ *      social post, only on a visit whose latch is the strip, each reported as the event's
+ *      `trigger`; never while a flight panel is open, where the strip would be shown unseen.
  */
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -406,13 +407,20 @@ describe('SupportStrip — the early moments (Nov 22 2026)', () => {
     expect(donateEvents()).toEqual([]);
   });
 
-  it('the second distinct flight brings the strip up after T2\'s settle, as "flights"', async () => {
+  it('the second flight brings the strip up only once its panel is closed, after T2\'s settle, as "flights"', async () => {
     render(tree());
     act(() => selectFlight(flight(1)));
     act(() => vi.advanceTimersByTime(10_000));
     await flush();
     expect(ask()).toBeNull();
     act(() => selectFlight(flight(2)));
+    // The second panel stays open: no strip and no `shown`, however long it stays.
+    act(() => vi.advanceTimersByTime(60_000));
+    await flush();
+    expect(ask()).toBeNull();
+    expect(donateEvents()).toEqual([]);
+    expect(statusFetches()).toBe(0);
+    act(() => selectFlight(null));
     act(() => vi.advanceTimersByTime(T2_SETTLE_MS - 1));
     await flush();
     expect(ask()).toBeNull();
@@ -422,18 +430,48 @@ describe('SupportStrip — the early moments (Nov 22 2026)', () => {
     expect(donateData()).toEqual([{ action: 'shown', trigger: 'flights' }]);
   });
 
-  it('a third flight inside the settle restarts the wait', async () => {
+  it('switching straight from one flight to the next is not a close: no strip while a panel is open', async () => {
     render(tree());
     act(() => selectFlight(flight(1)));
     act(() => selectFlight(flight(2)));
-    act(() => vi.advanceTimersByTime(T2_SETTLE_MS - 500));
     act(() => selectFlight(flight(3)));
+    act(() => vi.advanceTimersByTime(30_000));
+    await flush();
+    expect(ask()).toBeNull();
+    act(() => selectFlight(null));
+    act(() => vi.advanceTimersByTime(T2_SETTLE_MS));
+    await flush();
+    expect(ask()).not.toBeNull();
+  });
+
+  it('opening a flight inside the settle cancels it; the wait starts again at the next close', async () => {
+    render(tree());
+    act(() => selectFlight(flight(1)));
+    act(() => selectFlight(flight(2)));
+    act(() => selectFlight(null));
+    act(() => vi.advanceTimersByTime(T2_SETTLE_MS - 500));
+    // Re-opening one already seen counts too: any open panel cancels the wait.
+    act(() => selectFlight(flight(1)));
+    act(() => vi.advanceTimersByTime(30_000));
+    await flush();
+    expect(ask()).toBeNull();
+    act(() => selectFlight(null));
     act(() => vi.advanceTimersByTime(T2_SETTLE_MS - 1));
     await flush();
     expect(ask()).toBeNull();
     act(() => vi.advanceTimersByTime(1));
     await flush();
     expect(ask()).not.toBeNull();
+    expect(donateData()).toEqual([{ action: 'shown', trigger: 'flights' }]);
+  });
+
+  it('one flight opened and closed is not the moment', async () => {
+    render(tree());
+    act(() => selectFlight(flight(1)));
+    act(() => selectFlight(null));
+    act(() => vi.advanceTimersByTime(30_000));
+    await flush();
+    expect(ask()).toBeNull();
   });
 
   it('the same flight twice is one flight, whichever way it was opened: no early strip', async () => {
@@ -452,6 +490,7 @@ describe('SupportStrip — the early moments (Nov 22 2026)', () => {
     render(tree());
     act(() => selectFlight(flight(1)));
     act(() => selectFlight(flight(2)));
+    act(() => selectFlight(null));
     act(() => vi.advanceTimersByTime(T2_SETTLE_MS));
     await flush();
     expect(deepUseAskThisVisit()).toBe('waitlist');
@@ -467,6 +506,7 @@ describe('SupportStrip — the early moments (Nov 22 2026)', () => {
     render(tree());
     act(() => selectFlight(flight(1)));
     act(() => selectFlight(flight(2)));
+    act(() => selectFlight(null));
     act(() => vi.advanceTimersByTime(T2_SETTLE_MS));
     await flush();
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));

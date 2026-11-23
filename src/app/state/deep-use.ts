@@ -18,8 +18,9 @@
  * (`donatePromptMayOpen`). The support strip does not need it: it sits below the board.
  *
  * Since Nov 22 2026 the support strip alone may come sooner (`useSupportStripMoment`, rules in
- * src/lib/support-moment.js): after the second distinct flight opened on this page load (and
- * T2's settle), or after 60 s instead of five minutes on a visit that arrived from a social post
+ * src/lib/support-moment.js): two seconds after the second flight's panel is closed (two or more
+ * distinct flights opened on this page load, none open now), or after 60 s instead of five minutes
+ * on a visit that arrived from a social post
  * (`arrivedFromPostThisVisit`, read once when this module loads, before anything can rewrite the
  * address). Such a moment rolls the same latch; on 'email' and 'waitlist' visits it does nothing,
  * and those asks still wait for T1/T2 (`useDeepUseTrigger`, unchanged).
@@ -30,7 +31,7 @@ import { useEffect, useRef, useState } from 'react';
 import { chooseDeepUseAsk } from '@/lib/deep-use-ask.js';
 import { donatePromptMayOpen } from '@/lib/donate-prompt.js';
 import { TRIGGER_TIME_MS } from '@/lib/engagement.js';
-import { arrivedFromPost, firstTrigger, reachedEarlyFlights, stripTimeTriggerMs } from '@/lib/support-moment.js';
+import { arrivedFromPost, firstTrigger, flightsMomentArmed, stripTimeTriggerMs } from '@/lib/support-moment.js';
 import { clicksReachedThreshold } from '@/lib/waitlist-gate.js';
 import { engagementSnapshot, initEngagement, useEngagement } from './engagement';
 import { safeLocalStorage } from './storage';
@@ -144,13 +145,15 @@ function useDeepUseMoment(): 'time' | 'clicks' | null {
  * T1 or T2 as for every deep-use ask, or one of the strip's own early moments (Nov 22 2026,
  * src/lib/support-moment.js):
  *   'flights' — `distinctFlights` (the flights opened on this page load, the same one twice
- *               counted once) reached the second, and no new one followed for `T2_SETTLE_MS`;
+ *               counted once) reached the second, `flightOpen` is false (the panel is closed),
+ *               and it stayed closed for `T2_SETTLE_MS`; opening a flight cancels the wait until
+ *               the next close (`flightsMomentArmed`), so the strip never arrives behind a panel;
  *   'post'    — this visit arrived from a social post, and 60 s have passed.
  * The first to fire keeps its name for the life of the page. A moment only says the strip MAY
  * show: the caller still asks the latch (`deepUseAskThisVisit`), which is rolled then, the same
  * dice as ever, and shows the strip only on a 'donate' visit (`supportStripMayShow`).
  */
-export function useSupportStripMoment(distinctFlights: number): SupportStripTrigger | null {
+export function useSupportStripMoment(distinctFlights: number, flightOpen: boolean): SupportStripTrigger | null {
   const deep = useDeepUseMoment();
   const [first, setFirst] = useState<SupportStripTrigger | null>(null);
   const fire = (next: SupportStripTrigger) => setFirst((current) => firstTrigger(current, next));
@@ -167,12 +170,14 @@ export function useSupportStripMoment(distinctFlights: number): SupportStripTrig
     return () => clearTimeout(timer);
   }, []);
 
-  // The second distinct flight, then the settle; another new flight restarts the wait.
+  // Two or more flights opened and the panel closed, then the settle, timed from the close;
+  // opening a flight in the meantime clears the timer, and the next close starts it again.
+  const flightsArmed = flightsMomentArmed({ distinctFlights, flightOpen });
   useEffect(() => {
-    if (!reachedEarlyFlights(distinctFlights)) return undefined;
+    if (!flightsArmed) return undefined;
     const timer = setTimeout(() => fire('flights'), T2_SETTLE_MS);
     return () => clearTimeout(timer);
-  }, [distinctFlights]);
+  }, [flightsArmed]);
 
   // `deep` stands in for the one render before its effect records it (nothing fired earlier).
   return first ?? deep;

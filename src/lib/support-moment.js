@@ -8,8 +8,12 @@
 //
 // So the STRIP, and only the strip, gets two earlier moments:
 //
-//   'flights' — the second distinct flight opened on this page load (a plane on the map or a
-//               flight number; the same flight twice counts once), after the same settle as T2;
+//   'flights' — after the second flight's panel is closed: two or more distinct flights opened on
+//               this page load (a plane on the map, a flight number or a `?flight=` link; the
+//               same flight twice counts once) and no flight open now, held for T2's 2 s settle
+//               counted from the close. Opening a flight during the settle cancels it, and it
+//               waits for the next close. A strip that arrived while the flight panel (or the
+//               phone's flight sheet) was open would be counted `shown` behind it, unseen;
 //   'post'    — a visit that arrived from a social post: the strip's clock runs to
 //               POST_TRIGGER_TIME_MS (60 s) instead of five minutes.
 //
@@ -80,9 +84,22 @@ export function stripTimeTriggerMs(fromPost) {
   return fromPost ? POST_TRIGGER_TIME_MS : /** @type {number} */ (TRIGGER_TIME_MS);
 }
 
-/** Is this many distinct flights opened the 'flights' moment? */
+/** Have enough distinct flights been opened on this page load for the 'flights' moment? */
 export function reachedEarlyFlights(distinctFlights) {
   return Number.isInteger(distinctFlights) && distinctFlights >= EARLY_FLIGHT_COUNT;
+}
+
+/**
+ * Is the 'flights' moment's settle running? Two or more distinct flights opened on this page load
+ * and none open now (the flight panel, or the phone's flight sheet, is closed), so a strip that
+ * arrives is on screen. The caller times the settle from the moment this turns true and cancels it
+ * when it turns false (another flight opened).
+ *
+ * @param {{distinctFlights: number, flightOpen: boolean}} s
+ * @returns {boolean}
+ */
+export function flightsMomentArmed({ distinctFlights, flightOpen }) {
+  return reachedEarlyFlights(distinctFlights) && !flightOpen;
 }
 
 /**

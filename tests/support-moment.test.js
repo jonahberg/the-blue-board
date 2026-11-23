@@ -16,6 +16,7 @@ import {
   SUPPORT_STRIP_TRIGGERS,
   arrivedFromPost,
   firstTrigger,
+  flightsMomentArmed,
   isPostReferrerHost,
   reachedEarlyFlights,
   stripTimeTriggerMs,
@@ -114,6 +115,18 @@ describe('the moments', () => {
     expect(reachedEarlyFlights(2)).toBe(true);
     expect(reachedEarlyFlights(7)).toBe(true);
     expect(reachedEarlyFlights(Number.NaN)).toBe(false);
+  });
+
+  it('the flights moment waits for the second flight\'s panel to close', () => {
+    // Two or more flights opened, and none open now: the strip would be on screen.
+    expect(flightsMomentArmed({ distinctFlights: 2, flightOpen: false })).toBe(true);
+    expect(flightsMomentArmed({ distinctFlights: 5, flightOpen: false })).toBe(true);
+    // A panel (or the phone's flight sheet) is open: a strip now would sit behind it.
+    expect(flightsMomentArmed({ distinctFlights: 2, flightOpen: true })).toBe(false);
+    expect(flightsMomentArmed({ distinctFlights: 9, flightOpen: true })).toBe(false);
+    // One flight, opened and closed, is not the moment.
+    expect(flightsMomentArmed({ distinctFlights: 1, flightOpen: false })).toBe(false);
+    expect(flightsMomentArmed({ distinctFlights: 0, flightOpen: false })).toBe(false);
   });
 
   it('the first trigger keeps its name; nothing outside the four is ever reported', () => {
