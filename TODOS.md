@@ -120,9 +120,11 @@ Open work, checked against the code on 2026-11-10. Each entry names the file it 
   then closing it leaves focus on `<body>`. `shouldRestoreFocus` (`src/lib/focus-return.js`)
   gives up on a detached opener. Fall back to the "Find a flight" trigger, and drop or reword
   the `insideClosingContent` clause in `wasFocusLost`.
-- [ ] **Engagement provider lifecycle.** Add coverage for `src/app/state/engagement.tsx`
-  (initialisation order, subscription, dismissal sequencing), using the jsdom and
-  testing-library setup the watch-provider tests use.
+- [x] **Engagement provider lifecycle.** Covered Nov 23 2026 (`tests/engagement-store.test.tsx`):
+  the threshold read before the visit is recorded, init once per page, fail-closed stores; a
+  subscriber re-rendered only by a real change, one click listener, removed on reset; the waitlist
+  dialog's close reading its source before resetting it, keeping the session's "shown" and a
+  signup. Was: no coverage of `src/app/state/engagement.tsx` itself.
 
 ## Small cleanups
 
