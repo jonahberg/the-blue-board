@@ -228,6 +228,7 @@ describe('the source around every element that carries data-support', () => {
   it('finds the donation links on the dashboard, the content pages and the flight page', () => {
     const files = new Set(donationContexts.map((c) => c.where.split(':')[0]));
     for (const file of [
+      'src/app/shell/Header.tsx',
       'src/app/features/SupportStrip.tsx',
       'src/app/features/BmacToast.tsx',
       'src/app/features/CoverADay.tsx',

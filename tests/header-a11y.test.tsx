@@ -11,11 +11,13 @@
  * label. The class that keeps the label in the tree at every width is what is asserted.
  */
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { HELP_COVER_LABEL } from '@/lib/cover-a-day.js';
 import { supportUrl } from '@/lib/support-link.js';
+import { SUPPORT_CLICK_EVENT, installSupportClickTracking } from '@/lib/support-tracking.js';
 
 vi.mock('../src/app/state/feed', () => ({
   useFeed: () => ({ flights: [], freshness: 'live', countdown: 30 }),
@@ -46,6 +48,12 @@ afterEach(() => {
   watch.watched = [];
 });
 
+// Nov 2026: the phone header is 44 px, so its controls are 36 px surfaces whose `after:` box
+// reaches 4 px past the border on every side (5 px from inside the 1 px border, where a
+// pseudo-element is measured) — a 44 × 44 hit area that does not make the header taller.
+// `relative` anchors the box; `z-10` keeps it above the brief row's hit area from below.
+const HIT_BOX_44 = ['relative', 'z-10', 'h-9', 'min-w-9', 'after:absolute', 'after:-inset-[5px]'];
+
 describe('Header search button', () => {
   it('is named by its own label, kept in the accessibility tree at every width', () => {
     renderHeader();
@@ -66,12 +74,6 @@ describe('Header search button', () => {
     expect(button.querySelector('kbd')?.getAttribute('aria-hidden')).toBe('true');
     expect(button.getAttribute('aria-keyshortcuts')).toMatch(/Meta\+K/);
   });
-
-  // Nov 2026: the phone header is 44 px, so its controls are 36 px surfaces whose `after:` box
-  // reaches 4 px past the border on every side (5 px from inside the 1 px border, where a
-  // pseudo-element is measured) — a 44 × 44 hit area that does not make the header taller.
-  // `relative` anchors the box; `z-10` keeps it above the brief row's hit area from below.
-  const HIT_BOX_44 = ['relative', 'z-10', 'h-9', 'min-w-9', 'after:absolute', 'after:-inset-[5px]'];
 
   it('keeps a 44px hit area on coarse pointers at every width (only a fine pointer relaxes it)', () => {
     renderHeader();
@@ -105,6 +107,98 @@ describe('Header search button', () => {
     const help = screen.getByRole('button', { name: 'What is this dashboard?' }).className.split(/\s+/);
     expect(help).toContain('hidden');
     expect(help).toContain('md:inline-flex');
+  });
+});
+
+// Nov 22 2026: desktop (two thirds of visitors) had no visible way to give before the
+// five-minute strip. From `md:` up the header carries a labelled link, words from 1081 px,
+// icon + tooltip below that (measured: the words ran into the wordmark at 1024 px).
+describe('Header desktop support link', () => {
+  const BANNED = /\bdonat(?:e|es|ed|ion|ions|ing)\b|support the project|server costs?|\bconsider\b|chip in|coffee/i;
+  const desktopLink = () => document.querySelector<HTMLAnchorElement>('a[data-support="desktop-header"]')!;
+
+  it('is the any-amount link labelled desktop-header, named by its own words', () => {
+    renderHeader();
+    const link = screen.getByRole('link', { name: HELP_COVER_LABEL });
+    expect(link).toBe(desktopLink());
+    expect(link.getAttribute('href')).toBe(supportUrl('desktop-header'));
+    const params = new URL(link.getAttribute('href')!).searchParams;
+    expect(params.get('utm_content')).toBe('desktop-header');
+    expect(params.get('client_reference_id')).toBe('desktop-header');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toContain('noopener');
+    // No aria-label over the visible words (WCAG 2.5.3); the words are the shared constant.
+    expect(link.getAttribute('aria-label')).toBeNull();
+    expect(link.textContent).toBe(HELP_COVER_LABEL);
+    expect(link.textContent).not.toMatch(BANNED);
+    expect(link.querySelector('svg')?.getAttribute('class')).toContain('lucide-hand-heart');
+    expect(link.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('shows from md: up, where the phone icon is hidden, with the header controls\' 44px touch box', () => {
+    renderHeader();
+    const classes = desktopLink().className.split(/\s+/);
+    expect(classes).toContain('hidden');
+    expect(classes).toContain('md:inline-flex');
+    expect(classes).toEqual(expect.arrayContaining(HIT_BOX_44));
+    expect(classes).toContain('pointer-fine:md:after:hidden');
+    // Quiet like its neighbours: a ghost control in muted text, never a filled button.
+    expect(desktopLink().getAttribute('data-variant')).toBe('ghost');
+    expect(classes).toContain('text-muted-foreground');
+    // Below 1081 px the words are sr-only (still the name), never display:none.
+    const label = desktopLink().querySelector('span')!.className.split(/\s+/);
+    expect(label).toContain('max-[1081px]:sr-only');
+    expect(label.some((c) => /^([\w-]+:|max-\[\d+px\]:|min-\[\d+px\]:)?hidden$/.test(c))).toBe(false);
+    // The phone icon is its own control, hidden from md: up. Since Nov 22 2026 it is a button
+    // that opens the "Cover a day" sheet (tests/support-sheet.test.tsx), so no element carries
+    // the bare `mobile-header` label any more.
+    const phone = screen.getByRole('button', { name: 'Cover a day of The Blue Board' });
+    expect(phone).not.toBe(desktopLink());
+    expect(phone.className.split(/\s+/)).toContain('md:hidden');
+    expect(document.querySelector('[data-support="mobile-header"]')).toBeNull();
+  });
+
+  it('is counted as a support_click from desktop-header', () => {
+    renderHeader();
+    const send = vi.fn();
+    installSupportClickTracking(document, send);
+    // jsdom cannot navigate; stop the default after the capture-phase listener has counted it.
+    const stop = (e: Event) => e.preventDefault();
+    document.addEventListener('click', stop);
+    try {
+      fireEvent.click(desktopLink());
+    } finally {
+      document.removeEventListener('click', stop);
+    }
+    expect(send).toHaveBeenCalledWith(SUPPORT_CLICK_EVENT, { from: 'desktop-header' });
+  });
+
+  it('says its words in a tooltip only while they are not on screen', async () => {
+    // Radix positions the tooltip with floating-ui, which needs a ResizeObserver jsdom lacks.
+    globalThis.ResizeObserver ??= class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    renderHeader();
+    // jsdom has no matchMedia, so this is the narrow case: focus opens the tooltip.
+    fireEvent.focus(desktopLink());
+    expect((await screen.findByRole('tooltip')).textContent).toBe(HELP_COVER_LABEL);
+    cleanup();
+
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(min-width: 1081px)',
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    try {
+      renderHeader();
+      fireEvent.focus(desktopLink());
+      expect(screen.queryByRole('tooltip')).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
