@@ -38,7 +38,8 @@ import {
   BRIEF_HUBS, airportDisplayName, airportForms, isKnownAirportCode, numberWord, normalizeText,
 } from './brief-claims.js';
 import {
-  boardCoverageGapSec, hubCancelRates, hubConfirmedCancellations, hubDayOffsetsAt, serverOtpFromMetrics, ON_TIME_GRACE_MIN,
+  NETWORK_MIN_OPERATED, boardBehindReason, boardDayOffsetAt, hubConfirmedCancellations, networkInputs, networkReadings,
+  ON_TIME_GRACE_MIN,
 } from './hub-health.js';
 import {
   HUB_IMPAIRED_OTP_BELOW, HUB_IMPAIRING_CANCEL_RATE, faaItemImpairsHub, networkStatus, isWholeAirportClosure, withoutRoutineClosures,
@@ -47,7 +48,6 @@ import { IROPS_MINOR_AT, IROPS_SIGNIFICANT_AT } from './irops-score.js';
 import { buildFaaIndex } from './faa-context.js';
 import { computeFlightCategory, computeOpsImpact, parseCeiling, parseVisibilitySM } from './metar-category.js';
 import { airportTz } from './time-format.js';
-import { defaultSchedDayOffset } from './hubTz.js';
 import { isOnGround } from './flight-phase.js';
 import { isExpressCallsign } from './airborne-count.js';
 import { matchAircraft } from './fleet-match.js';
@@ -59,8 +59,12 @@ export { sameClockDaysBefore };
 // The routine-closure screen is shared with the hub strip; it lives in ops-health.js.
 export { isWholeAirportClosure };
 
-/** A hub reading below this many operated departures is too thin to call an outlier or set the tone. */
-export const BRIEF_MIN_OPERATED = 25;
+/**
+ * A hub reading below this many operated departures is too thin to call an outlier or set the tone.
+ * The network level's own floor (hub-health.js NETWORK_MIN_OPERATED): the strip's chip counts the
+ * same readings since Nov 22 2026.
+ */
+export const BRIEF_MIN_OPERATED = NETWORK_MIN_OPERATED;
 /**
  * Fewer hub on-time readings than this and there is no brief to write: "running smoothly" needs
  * evidence. The cron publishes nothing (the last brief goes stale honestly) until enough boards read.
@@ -82,20 +86,8 @@ export const BRIEF_MAX_BOARD_AGE_MS = 3 * 60 * 60 * 1000;
  */
 export const BRIEF_INDEX_MAX_STALE_SHARE = 0.25;
 
-/**
- * Why a hub board is too far behind for the brief, or null when it is current. Its coverage gap
- * (age for today's board; the unseen part of yesterday for yesterday's), from the payload's own
- * build time and day end at `nowMs`. A payload without `boardDayEndSec` is judged by age, as before.
- * @param {any} m  one /api/irops hubMetrics entry
- * @param {number} nowMs
- * @returns {string|null}
- */
-function boardBehindReason(m, nowMs) {
-  const gapSec = boardCoverageGapSec({ generatedAtSec: m?.generatedAt, dayEndSec: m?.boardDayEndSec ?? null, nowSec: nowMs / 1000 });
-  if (gapSec === null || gapSec * 1000 <= BRIEF_MAX_BOARD_AGE_MS) return null;
-  const min = Math.round(gapSec / 60);
-  return Number(m?.boardDayOffset) === -1 ? `board missing the last ${min} min of yesterday` : `board ${min} min old`;
-}
+// Why a hub board is too far behind (its coverage gap over BRIEF_MAX_BOARD_AGE_MS) lives in
+// hub-health.js (boardBehindReason): the strip's network level applies the same 3 hours.
 /** METAR observations older than this are not current weather. */
 export const BRIEF_MAX_METAR_AGE_MS = 3 * 60 * 60 * 1000;
 /**
@@ -282,8 +274,9 @@ export function programAirport(fact) {
 /**
  * Hubs with something a headline must name before it may call the other hubs normal: an on-time
  * figure under 80% (a hub's own fact with a material reading) or trailing the others (an outlier),
- * any FAA program or delays in effect there, or weather at warning level or worse (a weather fact
- * with a material key; caution has none). A possible program is not one. The verifier polices a
+ * any FAA program or delays in effect there, weather at warning level or worse (a weather fact with
+ * a material key; caution has none), or confirmed cancellations at 5% of its departures or more (a
+ * hub's cancellation fact at severity 30 or more). A possible program is not one. The verifier polices a
  * watch headline with it; the calm template uses it to decide whether "the other hubs are running
  * normally" is true after naming the one impaired hub.
  * @param {Array<{id: string, hub?: string, material?: string|null, outlier?: boolean}>} facts
@@ -296,6 +289,10 @@ export function hubsWithProblems(facts) {
     if (/^otp\.[A-Z]{3}$/.test(f.id) && (f.material !== null || f.outlier === true)) hubs.add(f.hub);
     if (/^faa\.active\.[A-Z]{3}\./.test(f.id)) hubs.add(f.hub);
     if (/^wx\.[A-Z]{3}$/.test(f.id) && f.material !== null && f.material !== undefined) hubs.add(f.hub);
+    // Cancellations at 5% of its departures or more (severity 30) are worth naming even under the
+    // 10% that impairs the hub (Nov 22 2026: "the other hubs are running normally" sat above
+    // "Houston (IAH) has 40 confirmed cancellations among its 450 departures today.").
+    if (/^cxl\.[A-Z]{3}$/.test(f.id) && Number(f.severity) >= 30) hubs.add(f.hub);
   }
   return [...hubs];
 }
@@ -532,13 +529,15 @@ function capitalize(s) {
   return s ? s[0].toUpperCase() + s.slice(1) : s;
 }
 /**
- * Which day a set of hub boards covers: 'today', 'yesterday' (before each hub's 6 AM rollover) or
- * 'mixed'. Statements say "today" or "yesterday" only when every board agrees.
+ * Which day a set of hub boards covers: 'today', 'yesterday' or 'mixed', by each board's own day
+ * (`dayOffsets`, hub-health.js boardDayOffsetAt: yesterday's board until the 6 AM rollover, and for
+ * as long as a cached payload still serves it). Statements say "today" or "yesterday" only when every
+ * board agrees.
  * @param {string[]} hubs
- * @param {number} nowMs
+ * @param {Record<string, number>} dayOffsets
  */
-function boardsDay(hubs, nowMs) {
-  const yesterday = hubs.map((h) => defaultSchedDayOffset(h, new Date(nowMs)) !== 0);
+function boardsDay(hubs, dayOffsets) {
+  const yesterday = hubs.map((h) => dayOffsets[h] !== 0);
   if (yesterday.length && yesterday.every(Boolean)) return 'yesterday';
   if (yesterday.some(Boolean)) return 'mixed';
   return 'today';
@@ -709,23 +708,17 @@ export function buildBriefFacts(sources, { nowMs }) {
   // ── On-time per hub (src/lib/hub-health.js serverOtpFromMetrics, the hub strip's number) ──
   /** @type {Record<string, {otp: number, operated: number, at: number|null}>} */
   const readings = {};
-  // Which hubs' boards still show yesterday (before 06:00 hub-local): their readings are named
-  // "yesterday" and never impair a hub. The strip dates its readings the same way (hub-health.js).
-  const dayOffsets = hubDayOffsetsAt(nowMs, BRIEF_HUBS);
+  // Which hubs' boards are yesterday's, by each board's own day (hub-health.js boardDayOffsetAt; the
+  // clock only for a payload that does not say): their readings are named "yesterday" and never
+  // impair a hub. The strip dates its readings the same way.
+  const hubMetricsIn = sources?.irops?.hubMetrics || {};
+  const dayOffsets = Object.fromEntries(BRIEF_HUBS.map((h) => [h, boardDayOffsetAt(hubMetricsIn[h], h, nowMs)]));
   if (status.irops === 'ok') {
-    const metrics = sources.irops.hubMetrics || {};
-    for (const hub of BRIEF_HUBS) {
-      const m = metrics[hub];
-      if (!m) continue;
-      const otp = serverOtpFromMetrics(m);
-      const operated = Number(m.operated || 0);
-      const atMs = Number.isFinite(Number(m.generatedAt)) && Number(m.generatedAt) > 0 ? Number(m.generatedAt) * 1000 : null;
-      if (otp === null) { skipped.push(`otp.${hub}: no reading`); continue; }
-      const behind = boardBehindReason(m, nowMs);
-      if (behind) { skipped.push(`otp.${hub}: ${behind}`); continue; }
-      if (operated < BRIEF_MIN_OPERATED) { skipped.push(`otp.${hub}: ${operated} operated (under ${BRIEF_MIN_OPERATED})`); continue; }
-      readings[hub] = { otp, operated, at: atMs };
-    }
+    // The readings the network level counts, on the strip too (hub-health.js networkReadings): at
+    // least BRIEF_MIN_OPERATED departed and a board no more than 3 h behind.
+    const gated = networkReadings(sources.irops.hubMetrics, { nowMs, hubCodes: BRIEF_HUBS });
+    for (const { hub, reason } of gated.skipped) skipped.push(`otp.${hub}: ${reason}`);
+    for (const [hub, r] of Object.entries(gated.readings)) readings[hub] = { otp: r.otp, operated: r.operated, at: r.at };
 
     // When every hub with a figure is healthy, a hub's own figure is padding: only a hub with an FAA
     // program in effect keeps its on-time fact (the summary, otp.floor, covers the rest; Nov 2026).
@@ -734,7 +727,7 @@ export function buildBriefFacts(sources, { nowMs }) {
     const outlier = everyHubHealthy ? healthyOutlier(readings) : null;
     const byOtp = [...readingHubs].sort((a, b) => readings[a].otp - readings[b].otp || a.localeCompare(b));
     const othersFloor = outlier ? readings[byOtp[1]].otp : null;
-    const readingsDay = boardsDay(readingHubs, nowMs);
+    const readingsDay = boardsDay(readingHubs, dayOffsets);
     for (const [hub, r] of Object.entries(readings)) {
       if (hub === outlier && othersFloor !== null) {
         // Healthy, but trailing the others (Nov 12 2026: O'Hare at 80% beside 89% or better).
@@ -763,7 +756,9 @@ export function buildBriefFacts(sources, { nowMs }) {
       const yesterday = dayOffsets[hub] !== 0;
       const when = yesterday ? 'yesterday' : 'so far today';
       const tail = yesterday ? "; today's figures are not in yet" : '';
-      const severity = r.otp < 50 ? 70 : r.otp < BRIEF_SOFT_HUB_OTP ? 45 : r.otp < BRIEF_HEALTHY_HUB_OTP ? 20 : 5;
+      // A soft reading from yesterday's board ranks with a hub under 80% (Nov 22 2026): it never impairs
+      // the hub, and at 45 it led the brief above today's FAA delays.
+      const severity = r.otp < 50 ? 70 : r.otp < BRIEF_SOFT_HUB_OTP && !yesterday ? 45 : r.otp < BRIEF_HEALTHY_HUB_OTP ? 20 : 5;
       facts.push({
         id: `otp.${hub}`,
         kind: 'otp',
@@ -790,7 +785,7 @@ export function buildBriefFacts(sources, { nowMs }) {
       // When every hub reads healthy, which one is lowest is not news: no "lowest" fact, and the
       // floor does not name it (so a sentence cannot either). The best hub is never news.
       const allHealthy = readings[low].otp >= BRIEF_HEALTHY_HUB_OTP;
-      const day = boardsDay(hubs, nowMs);
+      const day = boardsDay(hubs, dayOffsets);
       const reporting = hubsReporting(n, day);
       const are = day === 'yesterday' ? 'were' : 'are';
       if (!allHealthy) {
@@ -904,16 +899,16 @@ export function buildBriefFacts(sources, { nowMs }) {
     // the on-time readings, which of them are yesterday's, the FAA index, the index, and the hubs'
     // confirmed-cancellation rates. Its level is this fact's floor, so the brief's tone and the chip
     // agree; it also captures, in `material`, every tone change the breadth rule makes.
-    const hubOtps = Object.fromEntries(Object.entries(readings).map(([h, r]) => [h, r.otp]));
-    const cancelRates = hubCancelRates(sources.irops.hubMetrics, { nowMs, hubCodes: BRIEF_HUBS });
-    const net = networkStatus({
-      hubOtps,
+    // The very inputs the strip's chip builds (hub-health.js networkInputs), from the same payload.
+    const netInputs = networkInputs({
+      hubMetrics: sources.irops.hubMetrics,
       faaIndex: status.faa === 'ok' ? faaIndex : {},
-      hubCodes: BRIEF_HUBS,
       iropsScore: Number.isFinite(score) ? score : null,
-      hubDayOffsets: dayOffsets,
-      hubCancelRates: cancelRates,
+      nowMs,
+      hubCodes: BRIEF_HUBS,
     });
+    const cancelRates = netInputs.hubCancelRates;
+    const net = networkStatus(netInputs);
     facts.push({
       id: 'net.status',
       kind: 'network',
@@ -923,7 +918,11 @@ export function buildBriefFacts(sources, { nowMs }) {
       link: { tab: 'weather', section: 'irops' },
       severity: net.level === 'significant' ? 55 : net.level === 'minor' ? 25 : 2,
       toneFloor: net.level === 'significant' ? 'disrupted' : net.level === 'minor' ? 'watch' : 'calm',
-      material: `status:${net.level}`,
+      // The level, and since Nov 22 2026 which hubs are impaired ("status:normal:EWR"): one hub's
+      // trouble is named, not a tone, so a hub becoming or ceasing to be the impaired one (a rate
+      // crossing 10%, a delay's lower bound crossing 45 minutes, 68% ↔ 72% inside one 5-point
+      // bucket) changes what the brief must say without changing its tone or any other key.
+      material: `status:${net.level}${net.impairedHubs.length ? `:${[...net.impairedHubs].sort().join(',')}` : ''}`,
     });
 
     // ── Cancellations: confirmed and unconfirmed are separate facts (docs/specs/irops-delay-measurement.md) ──
@@ -935,7 +934,7 @@ export function buildBriefFacts(sources, { nowMs }) {
     // and Guam (under 1%) sit on yesterday's board for six hours of the US day.
     const boardHubs = BRIEF_HUBS.filter((h) => Number(sources.irops.hubMetrics?.[h]?.total) > 0);
     const departures = (hs) => hs.reduce((s, h) => s + Number(sources.irops.hubMetrics[h].total), 0);
-    const yesterdayHubs = boardHubs.filter((h) => defaultSchedDayOffset(h, new Date(nowMs)) !== 0);
+    const yesterdayHubs = boardHubs.filter((h) => dayOffsets[h] !== 0);
     const yesterdayShare = boardHubs.length ? departures(yesterdayHubs) / departures(boardHubs) : 0;
     const cxlDay = yesterdayShare <= 0.05 ? 'today' : yesterdayShare >= 0.95 ? 'yesterday' : 'mixed';
     if (confirmed < BRIEF_MIN_CONFIRMED_CANCELLATIONS) {

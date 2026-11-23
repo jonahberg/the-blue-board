@@ -518,15 +518,75 @@ export function networkLabel(hubOtps, { iropsScore = null, faaIndex = {}, hubCod
 }
 
 /**
- * -1 for each hub whose boards still show yesterday at `nowMs` (before 06:00 hub-local,
- * defaultSchedDayOffset), else 0. The brief dates its on-time and cancellation facts the same way,
- * so the brief and the strip agree on which readings are today's.
- * @param {number} nowMs
- * @param {string[]} [hubCodes]
- * @returns {Record<string, number>}
+ * A hub reading needs this many operated departures before the network level counts it, on the
+ * brief and on the strip alike (Nov 22 2026: the brief's own floor, BRIEF_MIN_OPERATED). Each hub's
+ * own chip keeps showing its figure from HUB_OTP_MIN_OPERATED (5); only the network level waits for
+ * 25, so Tokyo Narita's dozen departures, or Newark's first 18 of the morning, are never a whole
+ * impaired hub.
  */
-export function hubDayOffsetsAt(nowMs, hubCodes = HUB_ORDER) {
-  return Object.fromEntries(hubCodes.map((hub) => [hub, defaultSchedDayOffset(hub, new Date(nowMs))]));
+export const NETWORK_MIN_OPERATED = 25;
+
+/**
+ * Which day one /api/irops hub board is, at `nowMs`: -1 when the board's own day is over
+ * (yesterday's board, which /api/irops reads until 06:00 hub-local and its CDN copy can serve for a
+ * while after; or a board built before midnight read after it), 0 while its day is still running.
+ * Read from the board's own day end (`boardDayEndSec`); else its own day as built (`boardDayOffset`);
+ * the hub's clock (defaultSchedDayOffset) only for a payload that says neither (Nov 22 2026: at 06:10
+ * ET the clock called yesterday's final Newark board "so far today").
+ * @param {any} m  one hubMetrics entry (or undefined)
+ * @param {string} hub
+ * @param {number} nowMs
+ * @returns {-1|0}
+ */
+export function boardDayOffsetAt(m, hub, nowMs) {
+  const end = m?.boardDayEndSec === null || m?.boardDayEndSec === undefined ? NaN : Number(m.boardDayEndSec);
+  if (Number.isFinite(end) && end > 0) return nowMs / 1000 >= end ? -1 : 0;
+  if (m?.boardDayOffset === -1 || m?.boardDayOffset === 0) return m.boardDayOffset;
+  return defaultSchedDayOffset(hub, new Date(nowMs)) === 0 ? 0 : -1;
+}
+
+/**
+ * Why a hub board is too far behind for the network level or the brief, or null when it is current:
+ * its coverage gap (age for today's board; the unseen part of its day for yesterday's) over
+ * HUB_BOARD_CURRENT_MAX_SEC. A payload without `boardDayEndSec` is judged by age.
+ * @param {any} m  one /api/irops hubMetrics entry
+ * @param {number} nowMs
+ * @returns {string|null}
+ */
+export function boardBehindReason(m, nowMs) {
+  const gapSec = boardCoverageGapSec({ generatedAtSec: m?.generatedAt, dayEndSec: m?.boardDayEndSec ?? null, nowSec: nowMs / 1000 });
+  if (gapSec === null || gapSec <= HUB_BOARD_CURRENT_MAX_SEC) return null;
+  const min = Math.round(gapSec / 60);
+  return Number(m?.boardDayOffset) === -1 ? `board missing the last ${min} min of yesterday` : `board ${min} min old`;
+}
+
+/**
+ * The hub on-time readings the NETWORK LEVEL counts, one set for the brief and the strip (Nov 22
+ * 2026): from the server's /api/irops hubMetrics only, never a visitor's own loaded boards; at least
+ * NETWORK_MIN_OPERATED departed; a board no more than HUB_BOARD_CURRENT_MAX_SEC behind; each dated by
+ * its board's own day (boardDayOffsetAt). The brief's on-time facts are built from exactly these.
+ * @param {Record<string, any>|null|undefined} hubMetrics
+ * @param {{nowMs: number, hubCodes?: string[]}} opts
+ * @returns {{readings: Record<string, {otp: number, operated: number, at: number|null, dayOffset: -1|0}>,
+ *   skipped: Array<{hub: string, reason: string}>}}
+ */
+export function networkReadings(hubMetrics, { nowMs, hubCodes = HUB_ORDER }) {
+  /** @type {Record<string, {otp: number, operated: number, at: number|null, dayOffset: -1|0}>} */
+  const readings = {};
+  const skipped = [];
+  for (const hub of hubCodes) {
+    const m = hubMetrics?.[hub];
+    if (!m) continue;
+    const otp = serverOtpFromMetrics(m);
+    if (otp === null) { skipped.push({ hub, reason: 'no reading' }); continue; }
+    const behind = boardBehindReason(m, nowMs);
+    if (behind) { skipped.push({ hub, reason: behind }); continue; }
+    const operated = Number(m.operated || 0);
+    if (operated < NETWORK_MIN_OPERATED) { skipped.push({ hub, reason: `${operated} operated (under ${NETWORK_MIN_OPERATED})` }); continue; }
+    const at = Number.isFinite(Number(m.generatedAt)) && Number(m.generatedAt) > 0 ? Number(m.generatedAt) * 1000 : null;
+    readings[hub] = { otp, operated, at, dayOffset: boardDayOffsetAt(m, hub, nowMs) };
+  }
+  return { readings, skipped };
 }
 
 /**
@@ -546,8 +606,9 @@ export function hubConfirmedCancellations(m) {
 /**
  * The confirmed-canceled share of each hub's departures, for the network status: only hubs with a
  * rate to read (hubConfirmedCancellations), whose board is current (no more than
- * HUB_BOARD_CURRENT_MAX_SEC of its day unseen, the brief's 3-hour rule) and is TODAY's (a yesterday
- * board never impairs a hub). The brief builds its network status from this same map.
+ * HUB_BOARD_CURRENT_MAX_SEC of its day unseen, the brief's 3-hour rule) and is TODAY's by the board's
+ * own day (boardDayOffsetAt: a yesterday board never impairs a hub). The brief builds its network
+ * status from this same map.
  * @param {Record<string, any>|null|undefined} hubMetrics  /api/irops `hubMetrics`
  * @param {{nowMs: number, hubCodes?: string[]}} opts
  * @returns {Record<string, number>}
@@ -559,29 +620,30 @@ export function hubCancelRates(hubMetrics, { nowMs, hubCodes = HUB_ORDER }) {
     const m = hubMetrics?.[hub];
     const c = hubConfirmedCancellations(m);
     if (!c) continue;
-    const gapSec = boardCoverageGapSec({ generatedAtSec: m?.generatedAt, dayEndSec: m?.boardDayEndSec ?? null, nowSec: nowMs / 1000 });
-    if (gapSec !== null && gapSec > HUB_BOARD_CURRENT_MAX_SEC) continue;
-    if (defaultSchedDayOffset(hub, new Date(nowMs)) !== 0) continue;
+    if (boardBehindReason(m, nowMs)) continue;
+    if (boardDayOffsetAt(m, hub, nowMs) !== 0) continue;
     out[hub] = c.rate;
   }
   return out;
 }
 
 /**
- * Everything `networkStatus()` reads, from what the dashboard holds: the strip's hub-keyed on-time
- * readings, the FAA index, the IROPS score, and the /api/irops hubMetrics (for the cancellation
- * rates), dated at `nowMs`. The hub strip's chip and the fallback ticker both pass exactly this, so
- * they cannot disagree with each other, and it is built the way the brief builds its own.
- * @param {{hubOtps: Record<string, number>, hubMetrics?: Record<string, any>|null, faaIndex?: object,
- *   iropsScore?: number|string|null, nowMs: number, hubCodes?: string[]}} input
+ * Everything `networkStatus()` reads, from what the dashboard holds: the /api/irops hubMetrics (the
+ * gated on-time readings, networkReadings, and the cancellation rates), the FAA index and the IROPS
+ * score, dated at `nowMs`. The hub strip's chip and the fallback ticker both pass exactly this, and
+ * the brief builds its own from the same functions, so the three read one level. A visitor's own
+ * loaded boards never feed it (they still feed each hub's own chip).
+ * @param {{hubMetrics?: Record<string, any>|null, faaIndex?: object, iropsScore?: number|string|null,
+ *   nowMs: number, hubCodes?: string[]}} input
  */
-export function networkInputs({ hubOtps, hubMetrics = null, faaIndex = {}, iropsScore = null, nowMs, hubCodes = HUB_ORDER }) {
+export function networkInputs({ hubMetrics = null, faaIndex = {}, iropsScore = null, nowMs, hubCodes = HUB_ORDER }) {
+  const { readings } = networkReadings(hubMetrics, { nowMs, hubCodes });
   return {
-    hubOtps: hubOtps || {},
+    hubOtps: Object.fromEntries(Object.entries(readings).map(([hub, r]) => [hub, r.otp])),
     faaIndex: faaIndex || {},
     hubCodes,
     iropsScore,
-    hubDayOffsets: hubDayOffsetsAt(nowMs, hubCodes),
+    hubDayOffsets: Object.fromEntries(Object.entries(readings).map(([hub, r]) => [hub, r.dayOffset])),
     hubCancelRates: hubCancelRates(hubMetrics, { nowMs, hubCodes }),
   };
 }

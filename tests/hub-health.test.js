@@ -22,7 +22,9 @@ import {
   hubChipNoFigure,
   hubChipDestination,
   hubReadingDayOffset,
-  hubDayOffsetsAt,
+  boardDayOffsetAt,
+  networkReadings,
+  NETWORK_MIN_OPERATED,
   hubConfirmedCancellations,
   hubCancelRates,
   networkInputs,
@@ -262,13 +264,41 @@ describe('networkLabel', () => {
   });
 });
 
-describe('the network inputs the strip and the ticker share (networkInputs)', () => {
+describe('the network inputs the strip, the ticker and the brief share (networkInputs)', () => {
   const now = Date.parse('2026-11-10T21:40:00Z'); // 4:40 PM ET: every US hub on today's board
   const nowSec = now / 1000;
+  const board = (extra) => ({ total: 400, operated: 300, onTime: 270, cancellations: 0, cancellationsLikely: 0, generatedAt: nowSec - 2700, ...extra });
 
-  it('dates each hub by its own clock: before 06:00 hub-local the board is yesterday’s', () => {
-    expect(hubDayOffsetsAt(Date.parse('2026-11-11T08:00:00Z'), ['EWR', 'SFO', 'NRT'])).toEqual({ EWR: -1, SFO: -1, NRT: 0 });
-    expect(hubDayOffsetsAt(now, ['EWR', 'SFO'])).toEqual({ EWR: 0, SFO: 0 });
+  it('dates a board by its own day: over once its day ends, whatever the clock says (review item 2)', () => {
+    const ewr = Date.parse('2026-11-11T11:10:00Z'); // 06:10 ET
+    const midnightEt = Date.parse('2026-11-11T05:00:00Z') / 1000;
+    // Yesterday's final board, still served at 06:10 ET (the clock alone would call it today's).
+    expect(boardDayOffsetAt({ boardDayOffset: -1, boardDayEndSec: midnightEt }, 'EWR', ewr)).toBe(-1);
+    // A board built at 11 PM read after midnight: its day is over too.
+    expect(boardDayOffsetAt({ boardDayOffset: 0, boardDayEndSec: midnightEt }, 'EWR', Date.parse('2026-11-11T05:30:00Z'))).toBe(-1);
+    expect(boardDayOffsetAt({ boardDayOffset: 0, boardDayEndSec: midnightEt + 86400 }, 'EWR', ewr)).toBe(0);
+    // Without a day end, the board's own day; without either, the hub's clock.
+    expect(boardDayOffsetAt({ boardDayOffset: -1 }, 'EWR', ewr)).toBe(-1);
+    expect(boardDayOffsetAt({}, 'EWR', Date.parse('2026-11-11T08:00:00Z'))).toBe(-1);
+    expect(boardDayOffsetAt({}, 'EWR', now)).toBe(0);
+  });
+
+  it('gates the readings the network level counts: 25 departed, a board no more than 3 h behind (review item 1)', () => {
+    const { readings, skipped } = networkReadings({
+      EWR: board({ operated: 18, onTime: 11 }),
+      NRT: board({ total: 12, operated: 12, onTime: 8 }),
+      ORD: board({ onTime: 186, generatedAt: nowSec - 4 * 3600 }),
+      DEN: board(),
+      GUM: board({ total: 10, operated: 2, onTime: 1 }),
+    }, { nowMs: now });
+    expect(Object.keys(readings)).toEqual(['DEN']);
+    expect(readings.DEN).toMatchObject({ otp: 90, operated: 300, dayOffset: 0 });
+    expect(skipped).toEqual([
+      { hub: 'ORD', reason: 'board 240 min old' },
+      { hub: 'EWR', reason: `18 operated (under ${NETWORK_MIN_OPERATED})` },
+      { hub: 'NRT', reason: `12 operated (under ${NETWORK_MIN_OPERATED})` },
+      { hub: 'GUM', reason: 'no reading' },
+    ]);
   });
 
   it('reads the confirmed-cancellation rate of today’s current boards with 3 or more confirmed', () => {
@@ -277,12 +307,14 @@ describe('the network inputs the strip and the ticker share (networkInputs)', ()
     expect(hubConfirmedCancellations(m({ cancellations: 12 }))).toBeNull(); // 2 confirmed
     expect(hubCancelRates({ IAH: m(), ORD: m({ generatedAt: nowSec - 4 * 3600 }) }, { nowMs: now })).toEqual({ IAH: 0.1 });
     expect(hubCancelRates({ IAH: m() }, { nowMs: Date.parse('2026-11-11T08:00:00Z') })).toEqual({});
+    // Yesterday's board by its own day end, at 07:10 CT: never a rate that impairs.
+    expect(hubCancelRates({ IAH: m({ boardDayOffset: -1, boardDayEndSec: Date.parse('2026-11-11T06:00:00Z') / 1000 }) }, { nowMs: Date.parse('2026-11-11T13:10:00Z') })).toEqual({});
   });
 
-  it('builds everything networkStatus reads', () => {
-    const inputs = networkInputs({ hubOtps: { EWR: 66 }, hubMetrics: null, faaIndex: {}, iropsScore: 12, nowMs: now });
-    expect(inputs).toMatchObject({ hubOtps: { EWR: 66 }, iropsScore: 12, hubCodes: HUB_ORDER, hubCancelRates: {} });
-    expect(inputs.hubDayOffsets.EWR).toBe(0);
+  it('builds everything networkStatus reads from hubMetrics alone, never a visitor’s boards', () => {
+    const inputs = networkInputs({ hubMetrics: { EWR: board({ onTime: 198 }), NRT: board({ total: 12, operated: 12, onTime: 8 }) }, faaIndex: {}, iropsScore: 12, nowMs: now });
+    expect(inputs).toMatchObject({ hubOtps: { EWR: 66 }, hubDayOffsets: { EWR: 0 }, iropsScore: 12, hubCodes: HUB_ORDER, hubCancelRates: {} });
+    expect(networkInputs({ hubMetrics: null, nowMs: now }).hubOtps).toEqual({});
   });
 });
 

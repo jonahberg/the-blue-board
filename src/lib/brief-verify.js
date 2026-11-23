@@ -176,8 +176,9 @@ export function nonHubLeadReason(headline, tone, facts) {
  * delay program, under 70% on time today, FAA delays of 45 minutes or more, 10% of today's
  * departures canceled) the brief is calm, and its headline must name that hub
  * (`headline:misses_impaired_hub`) and must not call United or the hubs calm, smooth or "running
- * normally" before it does (`headline:calm_before_impaired_hub`): "the other hubs are running
- * normally" after naming it is the shape the owner liked ("Newark is lagging under low clouds; the
+ * normally" before it does (`headline:calm_before_impaired_hub`), nor say "the other hubs are running
+ * normally" while another hub with something to name goes unnamed (`headline:other_hubs_not_normal`,
+ * hubsWithProblems): after naming it, that is the shape the owner liked ("Newark is lagging under low clouds; the
  * other hubs are running normally."). A calm brief is never forced into "United is running normally"
  * while Newark has a 105-minute delay program.
  * @param {string} headline  normalized
@@ -190,8 +191,15 @@ export function impairedHubLeadReason(headline, tone, facts) {
   const [hub] = impairedHubs(facts);
   if (!hub) return null;
   if (!namesAirport(headline, hub)) return 'headline:misses_impaired_hub';
-  const calmRead = headline.replace(OTHER_HUBS_NORMAL_RE, (m, offset) => (offset > 0 && namesAirport(headline.slice(0, offset), hub) ? '' : m));
-  return CALM_HEADLINE_RE.test(calmRead) ? 'headline:calm_before_impaired_hub' : null;
+  // "the other hubs are running normally" holds only once every hub with something to name (an
+  // impaired hub, a hub under 80%, FAA delays, warning weather, cancellations at 5%) is named first.
+  const problems = [...new Set([hub, ...hubsWithProblems(facts)])];
+  const calmRead = headline.replace(OTHER_HUBS_NORMAL_RE, (m, offset) => (
+    offset > 0 && problems.every((h) => namesAirport(headline.slice(0, offset), h)) ? '' : m));
+  if (!CALM_HEADLINE_RE.test(calmRead)) return null;
+  // The only calm wording is "the other hubs…", and another hub with a problem goes unnamed.
+  const withoutOthers = headline.replace(OTHER_HUBS_NORMAL_RE, '');
+  return CALM_HEADLINE_RE.test(withoutOthers) ? 'headline:calm_before_impaired_hub' : 'headline:other_hubs_not_normal';
 }
 
 /**

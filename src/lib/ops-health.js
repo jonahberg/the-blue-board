@@ -15,7 +15,7 @@
 //                             any hub under 50% on time, the IROPS index at 40 or more
 //   minor        Some Delays  any of: two or more hubs IMPAIRED NOW; exactly one impaired hub while
 //                             the IROPS index is NETWORK_WATCH_INDEX_WITH_ONE_HUB (30) or more; the
-//                             average of the hubs' on-time readings at 70% or less
+//                             average of the hubs' on-time readings for TODAY at 70% or less
 //   normal       Smooth Ops   otherwise
 //
 // A hub is IMPAIRED NOW (hubImpairments) when any of:
@@ -27,6 +27,10 @@
 //     lower bound, or only an average, does not count);
 //   - 10% or more of today's departures on a current board are confirmed canceled ('cxl',
 //     hubCancelRates in hub-health.js, the measure behind the brief's `cxl.<HUB>` facts).
+// The on-time readings are the gated ones (hub-health.js networkReadings): the server's /api/irops
+// figure, at least 25 departed, a board no more than 3 h behind, dated by the board's own day. The
+// brief and the strip pass the same readings (networkInputs), so a visitor's own boards, Tokyo
+// Narita's dozen departures or Newark's first 18 of the morning never decide the network level.
 // One impaired hub is still named everywhere a hub is (its own chip keeps its colour, the brief
 // names it); it does not turn the network amber. A possible or planned program, weather, FAA delays
 // under 45 minutes, yesterday's readings, airports that are not United hubs, and the IROPS index in
@@ -294,7 +298,7 @@ const LEVEL_PRESENTATION = {
  * @param {Record<string,number>} [opts.hubDayOffsets]  -1 for a hub whose reading is yesterday's board.
  * @param {Record<string,number>} [opts.hubCancelRates]  hub-health.js hubCancelRates().
  * @returns {{level:'normal'|'minor'|'significant', severity:'green'|'amber'|'red', label:string,
- *   color:string, avg:number|null, worstHub:string|null, worstOtp:number|null,
+ *   color:string, avg:number|null, todayAvg:number|null, worstHub:string|null, worstOtp:number|null,
  *   programs:Array<{hub:string, kind:'GS'|'GDP', avgDelay:number|null}>, iropsScore:number|null,
  *   impaired: Record<string, Array<'gdp'|'dep'|'arr'|'otp'|'cxl'>>, impairedHubs: string[]}}
  */
@@ -313,6 +317,12 @@ export function networkStatus({ hubOtps = {}, faaIndex = {}, hubCodes = [], irop
     if (v < worstOtp) { worstOtp = v; worstHub = hub; }
   }
   const avg = otps.length ? Math.round(otps.reduce((a, b) => a + b, 0) / otps.length) : null;
+  // The average-on-time rule reads today's readings only (Nov 22 2026): yesterday's board never sets
+  // "Some Delays", through the average or a hub. The under-50% test below still reads every reading.
+  const todayOtps = Object.entries(hubOtps || {})
+    .filter(([hub, raw]) => raw !== null && raw !== undefined && raw !== '' && Number.isFinite(Number(raw)) && Number(hubDayOffsets?.[hub]) !== -1)
+    .map(([, raw]) => Number(raw));
+  const todayAvg = todayOtps.length ? Math.round(todayOtps.reduce((a, b) => a + b, 0) / todayOtps.length) : null;
 
   // ── Disrupted (unchanged): a hub under 50%, a red chip (ground stop / closure), index 40+ ──
   if (worstHub !== null && worstOtp < 50) raise('significant');
@@ -326,12 +336,13 @@ export function networkStatus({ hubOtps = {}, faaIndex = {}, hubCodes = [], irop
   // ── Some Delays: network-wide trouble (networkBreadthLevel) ──
   const impaired = hubImpairments({ hubOtps, hubDayOffsets, hubCancelRates, faaIndex, hubCodes });
   const impairedHubs = Object.keys(impaired);
-  raise(networkBreadthLevel({ impairedHubs: impairedHubs.length, iropsScore: score, avgOtp: avg }));
+  raise(networkBreadthLevel({ impairedHubs: impairedHubs.length, iropsScore: score, avgOtp: todayAvg }));
 
   return {
     level,
     ...LEVEL_PRESENTATION[level],
     avg,
+    todayAvg,
     worstHub,
     worstOtp: worstHub === null ? null : worstOtp,
     programs: extractHubPrograms(faaIndex, hubCodes),
@@ -397,7 +408,7 @@ function hubTroublePhrase(hub, reasons, { programs, hubOtps = {}, faaIndex = {} 
  */
 export function deriveOpsHealth(opts = {}) {
   const status = networkStatus(opts);
-  const { programs, worstHub, worstOtp, iropsScore, avg, impaired, impairedHubs } = status;
+  const { programs, worstHub, worstOtp, iropsScore, todayAvg, impaired, impairedHubs } = status;
   if (status.level === 'normal') {
     const [hub] = impairedHubs;
     if (!hub) return { level: 'normal', text: '' };
@@ -432,7 +443,7 @@ export function deriveOpsHealth(opts = {}) {
 
   // Some Delays: network-wide (networkBreadthLevel). The average when it is the reason, else the
   // impaired hubs, with the index when one hub and the index together are the reason.
-  if (avg !== null && avg <= 70) return { level: 'advisory', text: `Some delays — hub on-time averaging ${avg}%` };
+  if (todayAvg !== null && todayAvg <= 70) return { level: 'advisory', text: `Some delays — hub on-time averaging ${todayAvg}%` };
   if (impairedHubs.length >= 2) return { level: 'advisory', text: `Some delays at ${joinCodes(impairedHubs)}` };
   if (impairedHubs.length === 1) {
     const [hub] = impairedHubs;

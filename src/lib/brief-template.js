@@ -5,7 +5,10 @@
 // (tests run every fixture's template through the verifier). It must read acceptably on its own:
 // this is what every visitor sees whenever the model is not available.
 
-import { airportDisplayName, airportOwnNames } from './brief-claims.js';
+import {
+  airportDisplayName, airportOwnNames, allowanceFromValues, claimFailure, emptyAllowance, extractClaims, normalizeText,
+} from './brief-claims.js';
+import { ON_TIME_GRACE_MIN } from './hub-health.js';
 import {
   computeTone, hubsWithProblems, impairedHubs, isAirborneShortfallFact, isHubProgramFact, isNonHubProgramFact, programAirport,
   travelerNoteAllowed,
@@ -23,6 +26,10 @@ import { NETWORK_WATCH_INDEX_WITH_ONE_HUB } from './ops-health.js';
 const LEAD_SEVERITY = 20;
 /** A slot freed by a left-out weather item goes to a specific fact at or above this severity. */
 const FREED_SLOT_SEVERITY = 10;
+/** A watch headline names at most this many hubs (one item each, within the 4-item limit). */
+const MAX_NAMED_HUBS = 4;
+/** A calm headline names at most this many hubs with FAA delays or weather (one item each). */
+const MAX_NAMED_HUBS_CALM = 3;
 /** Programs away from the hubs a template prints, at most (the rest stay in the facts). */
 const NON_HUB_TEMPLATE_ITEMS = 2;
 
@@ -94,12 +101,12 @@ export function templateHeadline(facts, tone = computeTone(facts)) {
     if (gdps.length) return delayProgramHeadline(gdps, name);
     if (shortfall?.toneFloor === 'watch') return { headline: SHORTFALL_HEADLINE.watch, fact_ids: [shortfall.id] };
     if (impaired.length >= 2) {
+      // Named only while every named hub's fact fits in the items (buildTemplateBrief carries them).
       const leads = impaired.map(leadFor);
       const many = `Delays are building at ${joinNames(leads.map(name))}.`;
-      return {
-        headline: wordCount(many) <= HEADLINE_WORDS ? many : 'Delays are building at several United hubs.',
-        fact_ids: leads.map((f) => f.id),
-      };
+      return wordCount(many) <= HEADLINE_WORDS && leads.length <= MAX_NAMED_HUBS
+        ? { headline: many, fact_ids: leads.map((f) => f.id) }
+        : { headline: 'Delays are building at several United hubs.', fact_ids: [] };
     }
     // One impaired hub and the disruption index at 30 or more (or the hubs' average under 70%).
     const network = factById(sorted, 'net.index') || factById(sorted, 'net.status');
@@ -168,6 +175,8 @@ const firstPerHub = (facts) => facts.filter((f, i) => facts.findIndex((g) => g.h
  * @returns {{headline: string, fact_ids: string[]}}
  */
 function namedHubsHeadline(lead, named, facts, name) {
+  // More hubs than the calm brief's items could carry: none is named (no claim to ground).
+  if (named.length > MAX_NAMED_HUBS_CALM) return { headline: `${lead} several United hubs.`, fact_ids: [] };
   const hubs = named.map((f) => f.hub);
   const clause = `${lead} ${joinNames(named.map(name))}`;
   const othersFine = hubsWithProblems(facts).every((h) => hubs.includes(h));
@@ -382,6 +391,58 @@ function travelerWho(anchors) {
 }
 
 /**
+ * True when every name, number and time in the headline is in the values of these items' facts: the
+ * verifier checks a headline against the items that survive, so a template headline must be.
+ * @param {string} headline
+ * @param {BriefFact[]} items
+ */
+function headlineGrounded(headline, items) {
+  const allowance = emptyAllowance();
+  for (const f of items) {
+    allowanceFromValues(f.values || [], allowance);
+    if (f.kind === 'otp') allowanceFromValues([`${ON_TIME_GRACE_MIN} minutes`], allowance);
+  }
+  return extractClaims(normalizeText(headline)).every((c) => !claimFailure(c, allowance));
+}
+
+/**
+ * The picked items, made to carry what the headline rests on (Nov 22 2026: yesterday's four soft
+ * on-time lines outranked Newark's FAA delays, and "FAA delays are slowing Newark." sat above items
+ * that never named Newark): the headline's own facts whenever the items do not ground it, first; and
+ * at watch from one impaired hub beside the index at 30 or more, the index item, which is the other
+ * half of the reason. At the limit the last item that is neither gives way.
+ * @param {BriefFact[]} picked
+ * @param {{headline: string, fact_ids: string[], list: BriefFact[], limit: number, tone: string}} ctx
+ * @returns {BriefFact[]}
+ */
+function withHeadlineFacts(picked, { headline, fact_ids, list, limit, tone }) {
+  const index = byId(list);
+  const out = [...picked];
+  const headFacts = fact_ids.map((id) => index.get(id)).filter(Boolean);
+  const lead = headlineGrounded(headline, out) ? [] : headFacts.filter((f) => !out.includes(f));
+  const netIndex = index.get('net.index');
+  const needsIndex = Boolean(tone === 'watch' && impairedHubs(list).length === 1 && netIndex
+    && Number(netIndex.score) >= NETWORK_WATCH_INDEX_WITH_ONE_HUB && !out.includes(netIndex));
+  const adding = [...lead, ...(needsIndex ? [netIndex] : [])];
+  let front = 0;
+  for (const f of adding) {
+    if (out.length >= limit) {
+      // The last item whose going leaves the headline grounded (with what is still to be added).
+      const pending = adding.slice(adding.indexOf(f));
+      const drop = [...out].reverse().find((g) => !adding.includes(g)
+        && headlineGrounded(headline, [...out.filter((x) => x !== g), ...pending]));
+      if (!drop) break;
+      out.splice(out.indexOf(drop), 1);
+    }
+    // The headline's facts lead; the index follows the impaired hub's item.
+    const hubItem = out.findIndex((x) => x.impairs);
+    const at = lead.includes(f) ? front++ : hubItem >= 0 ? hubItem + 1 : Math.min(1, out.length);
+    out.splice(at, 0, f);
+  }
+  return out;
+}
+
+/**
  * The template brief for these facts.
  * @param {BriefFact[]} facts
  * @returns {Brief}
@@ -392,9 +453,9 @@ export function buildTemplateBrief(facts) {
   // Up to 4 items when something is wrong (prompt rule 4): any tone but calm, and since Nov 22 2026
   // a calm day with something wrong at a hub (one impaired hub, a hub under 80%, hub weather).
   const limit = tone === 'calm' && !troubleAtHub(list) ? 3 : 4;
-  const picked = pickItems(list, limit, tone);
-  const items = picked.map((f) => ({ text: f.statement, fact_ids: [f.id] }));
   const { headline, fact_ids } = templateHeadline(list, tone);
+  const picked = withHeadlineFacts(pickItems(list, limit, tone), { headline, fact_ids, list, limit, tone });
+  const items = picked.map((f) => ({ text: f.statement, fact_ids: [f.id] }));
 
   let traveler_note = null;
   if (travelerNoteAllowed(tone, list)) {

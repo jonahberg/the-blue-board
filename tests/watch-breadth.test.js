@@ -16,7 +16,7 @@ import { buildBriefUserMessage } from '../src/lib/brief-prompt.js';
 import { buildTemplateBrief, templateHeadline } from '../src/lib/brief-template.js';
 import { impairedHubLeadReason, verifyBrief } from '../src/lib/brief-verify.js';
 import { buildFaaIndex } from '../src/lib/faa-context.js';
-import { HUB_ORDER, networkInputs, networkLabel, serverOtpFromMetrics } from '../src/lib/hub-health.js';
+import { HUB_ORDER, networkInputs, networkLabel } from '../src/lib/hub-health.js';
 import { networkChipRepeatsBrief } from '../src/lib/network-chip.js';
 import {
   HUB_IMPAIRING_FAA_DELAY_MIN, NETWORK_WATCH_INDEX_WITH_ONE_HUB, deriveOpsHealth, faaItemImpairsHub, hubImpairments,
@@ -31,20 +31,18 @@ const LEVEL_FOR_TONE = { calm: 'normal', watch: 'minor', disrupted: 'significant
 const factsOf = ({ nowIso, sources }) => buildBriefFacts(sources, { nowMs: Date.parse(nowIso) }).facts;
 
 /**
- * The hub strip's side, from the same payloads, as HubHealthStrip.tsx computes it: the server's
- * on-time readings keyed by hub (useHubHealth), then networkInputs and networkLabel; the ticker
- * reads the same inputs through deriveOpsHealth.
+ * The hub strip's side, from the same payloads, exactly as HubHealthStrip.tsx computes it:
+ * networkInputs over the /api/irops hubMetrics (the gated readings, the board days, the
+ * cancellation rates), then networkLabel; the ticker reads the same inputs through deriveOpsHealth.
  */
 function strip({ nowIso, sources }) {
   const nowMs = Date.parse(nowIso);
-  const hubOtps = {};
-  for (const [hub, m] of Object.entries(sources.irops.hubMetrics)) {
-    const otp = serverOtpFromMetrics(m);
-    if (otp !== null) hubOtps[hub] = otp;
-  }
-  const inputs = networkInputs({ hubOtps, hubMetrics: sources.irops.hubMetrics, faaIndex: buildFaaIndex(sources.faa), iropsScore: sources.irops.score, nowMs, hubCodes: HUB_ORDER });
-  return { chip: networkLabel(hubOtps, inputs), ops: deriveOpsHealth(inputs), status: networkStatus(inputs) };
+  const inputs = networkInputs({ hubMetrics: sources.irops.hubMetrics, faaIndex: buildFaaIndex(sources.faa), iropsScore: sources.irops.score, nowMs, hubCodes: HUB_ORDER });
+  return { inputs, chip: networkLabel(inputs.hubOtps, inputs), ops: deriveOpsHealth(inputs), status: networkStatus(inputs) };
 }
+
+/** net.status's change key for a level and its impaired hubs (Nov 22 2026, review item 6). */
+const statusKey = (level, hubs) => `status:${level}${hubs.length ? `:${[...hubs].sort().join(',')}` : ''}`;
 
 /** The template headline each case produces (what the orchestrator will show the owner). */
 const HEADLINES = {
@@ -81,7 +79,7 @@ describe('the owner’s acceptance cases (Nov 22 2026)', () => {
         const { chip, status } = strip(payload);
         // Far fewer flights in the air (case 10) is the brief's own floor; the header never read it.
         const level = c.id === '10' ? 'normal' : LEVEL_FOR_TONE[tone];
-        expect(net.material).toBe(`status:${level}`);
+        expect(net.material).toBe(statusKey(level, c.impaired));
         expect(chip.level).toBe(level);
         expect(Object.keys(status.impaired).sort()).toEqual([...c.impaired].sort());
         if (c.id !== '10') expect(networkChipRepeatsBrief({ briefTone: tone, networkLevel: chip.level })).toBe(true);
@@ -158,7 +156,9 @@ describe('every fact that held a watch floor before Nov 22 2026 has a stated out
 
   it('net.status follows the new level', () => {
     expect(fact(one({ score: 25 }), 'net.status')).toMatchObject({ toneFloor: 'calm', material: 'status:normal' });
-    expect(fact(one({ score: 31, faa: { EWR: [program('ground_delay')] } }), 'net.status')).toMatchObject({ toneFloor: 'watch', material: 'status:minor' });
+    expect(fact(one({ score: 31, faa: { EWR: [program('ground_delay')] } }), 'net.status')).toMatchObject({ toneFloor: 'watch', material: 'status:minor:EWR' });
+    // The impaired hubs are in the key (review item 6): calm with Newark impaired is not calm with none.
+    expect(fact(one({ score: 22, faa: { EWR: [program('ground_delay')] } }), 'net.status')).toMatchObject({ toneFloor: 'calm', material: 'status:normal:EWR' });
   });
 
   it('cxl.<HUB>: 10% of today’s departures confirmed canceled impairs the hub; calm on its own; yesterday never', () => {
@@ -311,17 +311,13 @@ describe('every brief fixture: the brief and the network status agree', () => {
       const net = facts.find((f) => f.id === 'net.status');
       const shortfall = facts.find((f) => f.id === 'air.normal' && f.toneFloor !== 'calm');
       // Far fewer flights in the air is the brief's own floor (the header never read it).
-      if (!shortfall) expect(net.material).toBe(`status:${LEVEL_FOR_TONE[tone]}`);
+      if (!shortfall) expect(net.material).toBe(statusKey(LEVEL_FOR_TONE[tone], impairedHubs(facts)));
       if (tone === 'calm') expect(impairedHubs(facts).length).toBeLessThanOrEqual(1);
-      if (!fx.radio) {
-        // The strip's readings have no 25-departure floor or staleness gate: the levels agree when
-        // the hubs with a reading agree.
-        const { status } = strip(fx);
-        const briefHubs = new Set(facts.filter((f) => /^otp\.[A-Z]{3}$/.test(f.id)).map((f) => f.hub));
-        if (Object.keys(status.impaired).every((h) => briefHubs.has(h) || !status.impaired[h].includes('otp'))) {
-          expect(Object.keys(status.impaired).sort()).toEqual([...impairedHubs(facts)].sort());
-        }
-      }
+      // One set of gated readings on both sides (review item 1): the strip's level and impaired hubs
+      // are the brief's, always.
+      const { status } = strip(fx);
+      expect(status.level).toBe(net.material.split(':')[1]);
+      expect(Object.keys(status.impaired).sort()).toEqual([...impairedHubs(facts)].sort());
     });
   }
 });
