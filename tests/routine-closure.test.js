@@ -28,7 +28,8 @@ function closureAirport(code, reason) {
   };
 }
 
-const GOOD_OTPS = [88, 91, 85, 90, 87, 92, 86, 89, 90];
+// Keyed by hub since Nov 22 2026 (networkLabel counts impaired HUBS).
+const GOOD_OTPS = { ORD: 88, DEN: 91, IAH: 85, EWR: 90, SFO: 87, IAD: 92, LAX: 86, NRT: 89, GUM: 90 };
 
 describe('routine closures are screened once, for every surface', () => {
   it('a nightly curfew gives the hub chip no program marker and the strip reads Smooth Ops', () => {

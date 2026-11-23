@@ -177,7 +177,8 @@ describe('the header row', () => {
   });
 
   it('watch carries an icon and a word as well as the colour', async () => {
-    serve(body('planned-only-watch'));
+    // Delay programs at two hubs: a watch since Nov 22 2026 (a possible program no longer is one).
+    serve(body('watch-two-hub-gdp'));
     mount();
     await settle();
     const row = screen.getByRole('button', { name: /^Watch: / });
@@ -313,11 +314,12 @@ describe('the sheet and the sidebar panel', () => {
     expect(gs[0].getAttribute('title')).toMatch(/^The FAA has a ground stop in effect for flights heading to Newark/);
   });
 
-  it('a hub delay program chip is amber under a "Watch" brief; a ground stop chip stays red', async () => {
+  it('a hub delay program chip is amber, even under a calm brief; a ground stop chip stays red', async () => {
+    // One hub's delay program leaves the brief calm since Nov 22 2026; its chip keeps the hub's own amber.
     serve(body('sfo-gdp-morning'));
     mount();
     await settle();
-    fireEvent.click(screen.getByRole('button', { name: /^Watch: A ground delay program is holding flights into San Francisco\./ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Calm: San Francisco has a ground delay program; the other hubs are normal\./ }));
     await settle();
     const gdp = within(screen.getByRole('dialog')).getAllByRole('link', { name: 'FAA delay program · SFO' });
     expect(gdp[0].className).toContain('text-bb-warn');

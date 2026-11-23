@@ -22,6 +22,10 @@ import {
   hubChipNoFigure,
   hubChipDestination,
   hubReadingDayOffset,
+  hubDayOffsetsAt,
+  hubConfirmedCancellations,
+  hubCancelRates,
+  networkInputs,
 } from '../src/lib/hub-health.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
 
@@ -195,46 +199,90 @@ describe('hubHealthSeverity', () => {
 });
 
 describe('networkLabel', () => {
+  // Readings are keyed by hub since Nov 22 2026: the network level counts impaired HUBS, so a hub's
+  // on-time reading and its FAA program must be recognised as one hub (ops-health.js networkStatus).
+  const keyed = (pcts) => Object.fromEntries(pcts.map((pct, i) => [HUB_ORDER[i], pct]));
+
   it('averages the readings and names the day', () => {
-    expect(networkLabel([90, 80, 85])).toMatchObject({ avg: 85, label: 'Smooth Ops', color: '#22c55e', severity: 'green', level: 'normal' });
-    expect(networkLabel([60, 55, 65])).toMatchObject({ avg: 60, label: 'Some Delays', color: '#f59e0b', severity: 'amber', level: 'minor' });
-    expect(networkLabel([30, 40, 20])).toMatchObject({ avg: 30, label: 'Disrupted', color: '#ef4444', severity: 'red', level: 'significant' });
+    expect(networkLabel(keyed([90, 80, 85]))).toMatchObject({ avg: 85, label: 'Smooth Ops', color: '#22c55e', severity: 'green', level: 'normal' });
+    expect(networkLabel(keyed([60, 55, 65]))).toMatchObject({ avg: 60, label: 'Some Delays', color: '#f59e0b', severity: 'amber', level: 'minor' });
+    expect(networkLabel(keyed([30, 40, 20]))).toMatchObject({ avg: 30, label: 'Disrupted', color: '#ef4444', severity: 'red', level: 'significant' });
   });
 
   it('rounds the average before banding it', () => {
-    expect(networkLabel([71, 70]).avg).toBe(71); // 70.5 → 71
-    expect(networkLabel([71, 70]).label).toBe('Smooth Ops');
+    expect(networkLabel(keyed([71, 70])).avg).toBe(71); // 70.5 → 71
+    expect(networkLabel(keyed([71, 70])).label).toBe('Smooth Ops');
   });
 
   it('uses the same >70 / >=50 boundaries as the per-hub chip (edge case)', () => {
-    expect(networkLabel([70]).label).toBe('Some Delays');
-    expect(networkLabel([50]).label).toBe('Some Delays');
-    expect(networkLabel([49]).label).toBe('Disrupted');
+    expect(networkLabel(keyed([70])).label).toBe('Some Delays');
+    expect(networkLabel(keyed([50])).label).toBe('Some Delays');
+    expect(networkLabel(keyed([49])).label).toBe('Disrupted');
   });
 
   it('is never Smooth Ops while the IROPS index says disruption (audit Sep 26: 85% vs IROPS 35.3)', () => {
-    // v1.12.0 bands (<20 / <40): the audit's 35.3 is now MINOR, so the chip reads Some Delays —
-    // still never Smooth Ops beside a disruption badge.
-    const readings = [94, 85, 74, 83, 90, 76, 91];
+    // v1.12.0 bands (<20 / <40). Nov 22 2026: the index's minor band alone (the audit's 35.3, with
+    // every hub at 74% or better) is an ordinary evening, so the chip reads Smooth Ops, as the
+    // brief reads calm; at 40 it is Disrupted.
+    const readings = keyed([94, 85, 74, 83, 90, 76, 91]);
     expect(networkLabel(readings, { iropsScore: 45 })).toMatchObject({ avg: 85, label: 'Disrupted', severity: 'red' });
-    expect(networkLabel(readings, { iropsScore: 35.3 })).toMatchObject({ label: 'Some Delays', severity: 'amber' });
+    expect(networkLabel(readings, { iropsScore: 35.3 })).toMatchObject({ label: 'Smooth Ops', severity: 'green' });
     expect(networkLabel(readings, { iropsScore: 18 })).toMatchObject({ label: 'Smooth Ops', severity: 'green' });
+    // Beside one impaired hub, 30 or more is Some Delays.
+    expect(networkLabel({ ...readings, IAD: 66 }, { iropsScore: 35.3 })).toMatchObject({ label: 'Some Delays', severity: 'amber' });
   });
 
-  it('is never Smooth Ops while a hub has an FAA program', () => {
-    const readings = [90, 88, 92];
+  it('is never Smooth Ops beside a hub ground stop; delay programs need two hubs (Nov 22 2026)', () => {
+    const readings = { ORD: 90, EWR: 88, SFO: 92 };
     const hubCodes = ['ORD', 'EWR', 'SFO'];
     expect(networkLabel(readings, { faaIndex: { EWR: { groundStop: true } }, hubCodes }).label).toBe('Disrupted');
-    expect(networkLabel(readings, { faaIndex: { SFO: { delays: [{ type: 'ground_delay' }] } }, hubCodes }).label).toBe('Some Delays');
+    expect(networkLabel(readings, { faaIndex: { SFO: { delays: [{ type: 'ground_delay' }] } }, hubCodes }).label).toBe('Smooth Ops');
+    expect(networkLabel(readings, { faaIndex: { SFO: { delays: [{ type: 'ground_delay' }] }, EWR: { groundDelay: true } }, hubCodes }).label).toBe('Some Delays');
+  });
+
+  it('counts a hub once: its own program and its soft reading are one impaired hub', () => {
+    expect(networkLabel({ ORD: 90, EWR: 66 }, { faaIndex: { EWR: { groundDelay: true } }, hubCodes: ['ORD', 'EWR'], iropsScore: 22 }).label).toBe('Smooth Ops');
+  });
+
+  it('a yesterday reading never impairs a hub; a hub with 10% of today’s departures canceled does', () => {
+    const readings = { ORD: 90, EWR: 66, IAD: 64 };
+    expect(networkLabel(readings, { hubDayOffsets: { EWR: -1, IAD: -1 } }).label).toBe('Smooth Ops');
+    expect(networkLabel(readings).label).toBe('Some Delays');
+    expect(networkLabel({ ORD: 90 }, { hubCancelRates: { ORD: 0.12 }, faaIndex: { EWR: { groundDelay: true } }, hubCodes: ['ORD', 'EWR'] }).label).toBe('Some Delays');
   });
 
   it('can only get worse from the extra signals, never better', () => {
-    expect(networkLabel([30, 40], { iropsScore: 0 }).label).toBe('Disrupted');
+    expect(networkLabel(keyed([30, 40]), { iropsScore: 0 }).label).toBe('Disrupted');
   });
 
-  it('returns null when no hub has a reading (edge case)', () => {
-    expect(networkLabel([])).toBeNull();
+  it('returns null when no hub has a reading (edge case), and for the old unkeyed array', () => {
+    expect(networkLabel({})).toBeNull();
     expect(networkLabel(null)).toBeNull();
+    expect(networkLabel(/** @type {any} */ ([90, 80]))).toBeNull();
+  });
+});
+
+describe('the network inputs the strip and the ticker share (networkInputs)', () => {
+  const now = Date.parse('2026-11-10T21:40:00Z'); // 4:40 PM ET: every US hub on today's board
+  const nowSec = now / 1000;
+
+  it('dates each hub by its own clock: before 06:00 hub-local the board is yesterday’s', () => {
+    expect(hubDayOffsetsAt(Date.parse('2026-11-11T08:00:00Z'), ['EWR', 'SFO', 'NRT'])).toEqual({ EWR: -1, SFO: -1, NRT: 0 });
+    expect(hubDayOffsetsAt(now, ['EWR', 'SFO'])).toEqual({ EWR: 0, SFO: 0 });
+  });
+
+  it('reads the confirmed-cancellation rate of today’s current boards with 3 or more confirmed', () => {
+    const m = (extra) => ({ total: 400, cancellations: 50, cancellationsLikely: 10, generatedAt: nowSec - 2700, ...extra });
+    expect(hubConfirmedCancellations(m())).toEqual({ confirmed: 40, total: 400, rate: 0.1 });
+    expect(hubConfirmedCancellations(m({ cancellations: 12 }))).toBeNull(); // 2 confirmed
+    expect(hubCancelRates({ IAH: m(), ORD: m({ generatedAt: nowSec - 4 * 3600 }) }, { nowMs: now })).toEqual({ IAH: 0.1 });
+    expect(hubCancelRates({ IAH: m() }, { nowMs: Date.parse('2026-11-11T08:00:00Z') })).toEqual({});
+  });
+
+  it('builds everything networkStatus reads', () => {
+    const inputs = networkInputs({ hubOtps: { EWR: 66 }, hubMetrics: null, faaIndex: {}, iropsScore: 12, nowMs: now });
+    expect(inputs).toMatchObject({ hubOtps: { EWR: 66 }, iropsScore: 12, hubCodes: HUB_ORDER, hubCancelRates: {} });
+    expect(inputs.hubDayOffsets.EWR).toBe(0);
   });
 });
 

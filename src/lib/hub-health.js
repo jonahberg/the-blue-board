@@ -8,7 +8,8 @@
 // :6077-6094 the server derivation, :5685-5734 the severity/label bands). The bar's
 // markup, the FAA-program blend and the 🏠 marker stay in renderHubHealthBar().
 
-import { networkStatus } from './ops-health.js';
+import { defaultSchedDayOffset } from './hubTz.js';
+import { HUB_CANCEL_MIN_CONFIRMED, networkStatus } from './ops-health.js';
 import { isPlausibleDelta } from './schedule-plausibility.js';
 
 /** Fixed left-to-right order of the hub-health bar. */
@@ -490,24 +491,97 @@ export function hubHealthSeverity(pct) {
 
 /**
  * The trailing network-wide chip. Its level comes from `networkStatus()` (ops-health.js),
- * the one definition the ticker and the IROPS badge also follow — pass the IROPS score and
- * the FAA index so the chip can never read "Smooth Ops" beside a disruption. Without them
- * it bands the on-time readings alone.
+ * the one definition the ticker and the brief's tone also follow — pass the IROPS score, the FAA
+ * index, which readings are yesterday's and the hubs' cancellation rates (networkInputs builds them
+ * all) so the chip and the brief read the same level. Without them it bands the on-time readings
+ * alone.
  *
- * @param {number[]} pcts  per-hub on-time readings.
- * @param {{iropsScore?: number|string|null, faaIndex?: object, hubCodes?: string[]}} [signals]
+ * Readings are keyed by hub (Nov 22 2026): the network level counts impaired HUBS, so a hub's
+ * reading and its FAA program must be recognised as the same hub.
+ *
+ * @param {Record<string, number>} hubOtps  on-time reading per hub code.
+ * @param {{iropsScore?: number|string|null, faaIndex?: object, hubCodes?: string[],
+ *   hubDayOffsets?: Record<string, number>, hubCancelRates?: Record<string, number>}} [signals]
  * @returns {{avg: number, label: string, color: string, severity: 'green'|'amber'|'red',
  *   level: 'normal'|'minor'|'significant'}|null} null when no hub has a reading.
  */
-export function networkLabel(pcts, { iropsScore = null, faaIndex = {}, hubCodes = HUB_ORDER } = {}) {
-  if (!pcts || !pcts.length) return null;
-  const hubOtps = Object.fromEntries(pcts.map((pct, i) => [String(i), pct]));
-  const status = networkStatus({ hubOtps, faaIndex, hubCodes, iropsScore });
+export function networkLabel(hubOtps, { iropsScore = null, faaIndex = {}, hubCodes = HUB_ORDER, hubDayOffsets = {}, hubCancelRates = {} } = {}) {
+  if (!hubOtps || typeof hubOtps !== 'object' || Array.isArray(hubOtps) || Object.keys(hubOtps).length === 0) return null;
+  const status = networkStatus({ hubOtps, faaIndex, hubCodes, iropsScore, hubDayOffsets, hubCancelRates });
   return {
     avg: /** @type {number} */ (status.avg),
     label: status.label,
     color: status.color,
     severity: status.severity,
     level: status.level,
+  };
+}
+
+/**
+ * -1 for each hub whose boards still show yesterday at `nowMs` (before 06:00 hub-local,
+ * defaultSchedDayOffset), else 0. The brief dates its on-time and cancellation facts the same way,
+ * so the brief and the strip agree on which readings are today's.
+ * @param {number} nowMs
+ * @param {string[]} [hubCodes]
+ * @returns {Record<string, number>}
+ */
+export function hubDayOffsetsAt(nowMs, hubCodes = HUB_ORDER) {
+  return Object.fromEntries(hubCodes.map((hub) => [hub, defaultSchedDayOffset(hub, new Date(nowMs))]));
+}
+
+/**
+ * Confirmed cancellations on one hub's /api/irops board: canceled minus "likely canceled", against
+ * the board's departures. Null below HUB_CANCEL_MIN_CONFIRMED confirmed, or with no departures.
+ * The brief's `cxl.<HUB>` facts and the network status both read this.
+ * @param {any} m  one hubMetrics entry
+ * @returns {{confirmed: number, total: number, rate: number}|null}
+ */
+export function hubConfirmedCancellations(m) {
+  const confirmed = Math.max(0, Number(m?.cancellations || 0) - Number(m?.cancellationsLikely || 0));
+  const total = Number(m?.total || 0);
+  if (!(confirmed >= HUB_CANCEL_MIN_CONFIRMED) || !(total > 0)) return null;
+  return { confirmed, total, rate: confirmed / total };
+}
+
+/**
+ * The confirmed-canceled share of each hub's departures, for the network status: only hubs with a
+ * rate to read (hubConfirmedCancellations), whose board is current (no more than
+ * HUB_BOARD_CURRENT_MAX_SEC of its day unseen, the brief's 3-hour rule) and is TODAY's (a yesterday
+ * board never impairs a hub). The brief builds its network status from this same map.
+ * @param {Record<string, any>|null|undefined} hubMetrics  /api/irops `hubMetrics`
+ * @param {{nowMs: number, hubCodes?: string[]}} opts
+ * @returns {Record<string, number>}
+ */
+export function hubCancelRates(hubMetrics, { nowMs, hubCodes = HUB_ORDER }) {
+  /** @type {Record<string, number>} */
+  const out = {};
+  for (const hub of hubCodes) {
+    const m = hubMetrics?.[hub];
+    const c = hubConfirmedCancellations(m);
+    if (!c) continue;
+    const gapSec = boardCoverageGapSec({ generatedAtSec: m?.generatedAt, dayEndSec: m?.boardDayEndSec ?? null, nowSec: nowMs / 1000 });
+    if (gapSec !== null && gapSec > HUB_BOARD_CURRENT_MAX_SEC) continue;
+    if (defaultSchedDayOffset(hub, new Date(nowMs)) !== 0) continue;
+    out[hub] = c.rate;
+  }
+  return out;
+}
+
+/**
+ * Everything `networkStatus()` reads, from what the dashboard holds: the strip's hub-keyed on-time
+ * readings, the FAA index, the IROPS score, and the /api/irops hubMetrics (for the cancellation
+ * rates), dated at `nowMs`. The hub strip's chip and the fallback ticker both pass exactly this, so
+ * they cannot disagree with each other, and it is built the way the brief builds its own.
+ * @param {{hubOtps: Record<string, number>, hubMetrics?: Record<string, any>|null, faaIndex?: object,
+ *   iropsScore?: number|string|null, nowMs: number, hubCodes?: string[]}} input
+ */
+export function networkInputs({ hubOtps, hubMetrics = null, faaIndex = {}, iropsScore = null, nowMs, hubCodes = HUB_ORDER }) {
+  return {
+    hubOtps: hubOtps || {},
+    faaIndex: faaIndex || {},
+    hubCodes,
+    iropsScore,
+    hubDayOffsets: hubDayOffsetsAt(nowMs, hubCodes),
+    hubCancelRates: hubCancelRates(hubMetrics, { nowMs, hubCodes }),
   };
 }

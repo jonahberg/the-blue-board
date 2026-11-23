@@ -1,6 +1,6 @@
 {
  "name": "five-nonhub-storm",
- "description": "A Northeast thunderstorm evening: five FAA programs away from the hubs (a ground stop for flights into Boston, ground delay programs for New York LaGuardia, New York JFK, Philadelphia and Washington Reagan), none at a hub; thunderstorms and gusts at Newark (78% on time, 21 confirmed cancellations), light rain at Washington Dulles, the index 24.1 (minor), 38 confirmed cancellations across the hubs. Expected tone: watch, from Newark weather and the index; the three most severe programs away from the hubs are sent one by one, the other two folded into one count.",
+ "description": "A Northeast thunderstorm evening: five FAA programs away from the hubs (a ground stop for flights into Boston, ground delay programs for New York LaGuardia, New York JFK, Philadelphia and Washington Reagan), none at a hub; thunderstorms and gusts at Newark (78% on time, 21 confirmed cancellations), light rain at Washington Dulles, the index 24.1 (minor), 38 confirmed cancellations across the hubs. Expected tone: calm since Nov 22 2026 (it was watch, from Newark weather and the index in its minor band; neither sets the tone alone now); the three most severe programs away from the hubs are sent one by one, the other two folded into one count.",
  "nowIso": "2026-11-12T01:00:00Z",
  "sources": {
   "irops": {
@@ -824,6 +824,6 @@
   }
  },
  "expect": {
-  "tone": "watch"
+  "tone": "calm"
  }
 }

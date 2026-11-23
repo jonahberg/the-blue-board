@@ -4,6 +4,9 @@
 // and the panel are one brief, shown twice by design (the row says "In the sidebar"). The chip is
 // `networkStatus()` (ops-health.js), which the brief already carries as its `net.status` fact and
 // which floors the brief's tone, so while the two agree the chip only repeats the row above it.
+// Since Nov 22 2026 both read the same breadth rule from the same inputs (hub-health.js
+// networkInputs): one hub's delay program leaves the brief calm and the chip at "Smooth Ops", and
+// the chip steps aside; two impaired hubs make them "Watch" and "Some Delays" together.
 //
 // The chip stays whenever it says something the row does not:
 //   - no current brief (the row is the rotating ticker) — the chip is the strip's standing status;

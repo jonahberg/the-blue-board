@@ -32,6 +32,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { faaUnknownLine } from '@/lib/faa-freshness.js';
 import { decodeSquawk, isOnGround } from '@/lib/flight-phase.js';
+import { networkInputs } from '@/lib/hub-health.js';
 import { deriveOpsHealth } from '@/lib/ops-health.js';
 import { buildTickerItems } from '@/lib/ticker.js';
 import { cn } from '@/lib/utils';
@@ -85,13 +86,19 @@ function useTickerItems(): TickerItem[] {
         Boolean(entry),
       );
 
-    const opsHealth = deriveOpsHealth({
-      hubOtps: byHub,
-      faaIndex: weather.faaIndex,
-      hubCodes: HUB_ORDER as string[],
-      // The client fallback fills this when /api/irops is dark — see `state/irops.tsx`.
-      iropsScore: irops.score,
-    }) as { level: string; text: string };
+    // The same inputs the hub strip's chip reads (networkInputs), so the advisory line and the chip
+    // follow one level.
+    const opsHealth = deriveOpsHealth(
+      networkInputs({
+        hubOtps: byHub,
+        hubMetrics: irops.data?.hubMetrics ?? null,
+        faaIndex: weather.faaIndex,
+        // The client fallback fills this when /api/irops is dark — see `state/irops.tsx`.
+        iropsScore: irops.score,
+        nowMs: Date.now(),
+        hubCodes: HUB_ORDER as string[],
+      }),
+    ) as { level: string; text: string; note?: string };
 
     return buildTickerItems({
       opsHealth,
@@ -105,7 +112,7 @@ function useTickerItems(): TickerItem[] {
       // A stale FAA answer leaves faaIndex empty, which looks like a calm day: say "unknown".
       faaUnknown: Number.isFinite(weather.faaUnknownSince) ? faaUnknownLine(weather.faaUnknownSince as number) : null,
     }) as TickerItem[];
-  }, [feed.flights, fleetDb.length, starlink.tails, byHub, weather.faaIndex, weather.faaUnknownSince, irops.score]);
+  }, [feed.flights, fleetDb.length, starlink.tails, byHub, weather.faaIndex, weather.faaUnknownSince, irops.score, irops.data]);
 }
 
 function BriefRow({ view, alert }: { view: BriefReady; alert: string | null }) {

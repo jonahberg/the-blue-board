@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   BRIEF_AIRBORNE_DISRUPTED_PCT, BRIEF_AIRBORNE_MIN_USUAL, BRIEF_AIRBORNE_NOTABLE_PCT, BRIEF_AIRBORNE_WATCH_PCT, scheduleReadNeeded,
-  BRIEF_HUBS, airborneNormal, airborneShortfallTone, airportDayWord, buildBriefFacts, isAirborneShortfallFact, sameClockDaysBefore, computeTone, countAirborneAndStarlink,
+  BRIEF_HUBS, airborneNormal, airborneShortfallTone, airportDayWord, buildBriefFacts, isAirborneShortfallFact, sameClockDaysBefore, computeTone, countAirborneAndStarlink, impairedHubs,
   faaCausePhrase, formatAirportClock, isNonHubProgramFact, isWholeAirportClosure, materialKey, maxTone,
   parseIsoMs, planDateMs, publicFact, resolvePlanHhmm, resolveZuluHhmm, travelerNoteAllowed,
 } from '../src/lib/brief-facts.js';
@@ -141,10 +141,11 @@ describe('buildBriefFacts: the catalogue', () => {
     expect(ewr.statement).toBe("The FAA's operations plan says a ground stop or ground delay program is possible for flights into Newark (EWR) until 9:00 PM ET. It is not in effect.");
     expect(ewr.values).toContain('9:00 PM ET');
     expect(byId(facts)['faa.planned.SFO'].values).toContain('4:00 PM PT');
-    expect(ewr.toneFloor).toBe('watch');
+    // Nov 22 2026: a possible program is not in effect, so it never sets the tone.
+    expect(ewr.toneFloor).toBe('calm');
     // The en-route CDRS/SWAP line names no airport and is not a stop or delay program.
     expect(facts.some((f) => /FLORIDA/i.test(f.statement))).toBe(false);
-    expect(computeTone(facts)).toBe('watch');
+    expect(computeTone(facts)).toBe('calm');
   });
 
   it('ranks possible programs at airports that are not hubs last, below every other fact', () => {
@@ -152,7 +153,8 @@ describe('buildBriefFacts: the catalogue', () => {
     expect(facts.slice(-2).map((f) => f.id)).toEqual(['faa.planned.BOS', 'faa.planned.count']);
     expect(facts.slice(-2).every((f) => f.severity === 0)).toBe(true);
     expect(facts.slice(0, -2).every((f) => f.severity > 0)).toBe(true);
-    // A possible program at a hub still ranks as a watch, and so does the count beside it.
+    // A possible program at a hub later today still ranks above the background, and so does the
+    // count beside it (it no longer sets the tone, Nov 22 2026).
     const watch = byId(build(fixture('planned-only-watch')).facts);
     expect(watch['faa.planned.EWR'].severity).toBe(22);
     expect(watch['faa.planned.count'].severity).toBe(3);
@@ -191,7 +193,8 @@ describe('buildBriefFacts: the catalogue', () => {
     expect(unconfirmed.values).not.toContain('6');
     expect(confirmed.values).not.toContain('162');
     expect(unconfirmed.severity).toBeLessThan(5);
-    expect(computeTone(facts)).toBe('watch'); // the index is in the minor band
+    // The index is in its minor band, which alone is calm since Nov 22 2026 (an ordinary evening).
+    expect(computeTone(facts)).toBe('calm');
   });
 
   it('leaves out hubs too thin to read and boards too old to trust, and says so', () => {
@@ -325,16 +328,18 @@ describe('tone: FAA programs at United hubs', () => {
   const withFaa = (edit) => build(fx, { faa: fx.sources.faa.map((a) => edit(a) ?? a) }).facts;
   const program = (type, extra = {}) => (a) => ({ ...a, programs: [{ type, reason: 'WX:Thunderstorms', endTime: '2026-11-11T23:59:00Z', ...extra }] });
 
-  it('a ground delay program at one hub is a watch, as the header’s "Some Delays" chip says', () => {
+  it('a ground delay program at one hub is calm and impairs that hub, as the header reads "Smooth Ops" (Nov 22 2026)', () => {
+    // Until Nov 22 2026 one hub's delay program was a watch ("Some Delays"); it is now named, not a tone.
     const facts = build(fx).facts;
-    expect(computeTone(facts)).toBe('watch');
-    expect(byId(facts)['faa.active.SFO.gdp'].toneFloor).toBe('watch');
-    expect(byId(facts)['faa.active.count'].toneFloor).toBe('watch');
-    expect(byId(facts)['net.status'].statement).toContain('"Some Delays"');
-    expect(travelerNoteAllowed('watch', facts)).toBe(true);
+    expect(computeTone(facts)).toBe('calm');
+    expect(byId(facts)['faa.active.SFO.gdp']).toMatchObject({ toneFloor: 'calm', impairs: 'SFO' });
+    expect(byId(facts)['faa.active.count'].toneFloor).toBe('calm');
+    expect(byId(facts)['net.status'].statement).toContain('"Smooth Ops"');
+    // Travelers bound there are still held: the note is allowed at any tone.
+    expect(travelerNoteAllowed('calm', facts)).toBe(true);
   });
 
-  it('a ground stop or closure at a hub is disrupted; delay programs at any number of hubs stay a watch', () => {
+  it('a ground stop or closure at a hub is disrupted; delay programs at two or more hubs are a watch', () => {
     const gs = withFaa((a) => (a.airportCode === 'EWR' ? program('ground_stop')(a) : null));
     expect(computeTone(gs)).toBe('disrupted');
     expect(byId(gs)['faa.active.EWR.gs'].toneFloor).toBe('disrupted');
@@ -345,9 +350,10 @@ describe('tone: FAA programs at United hubs', () => {
     expect(byId(twoGdps)['faa.active.count'].toneFloor).toBe('watch');
     expect(byId(twoGdps)['net.status'].statement).toContain('"Some Delays"');
     expect(computeTone(twoGdps)).toBe('watch');
-    // A second program at the SAME hub is still one hub.
+    // A second program at the SAME hub is still one hub: calm (Nov 22 2026).
     const sameHub = withFaa((a) => (a.airportCode === 'SFO' ? { ...a, programs: [...a.programs, { type: 'ground_delay', reason: 'wind' }] } : null));
-    expect(byId(sameHub)['faa.active.count'].toneFloor).toBe('watch');
+    expect(byId(sameHub)['faa.active.count'].toneFloor).toBe('calm');
+    expect(computeTone(sameHub)).toBe('calm');
   });
 
   it('a ground delay program away from the hubs never sets the tone, and allows a traveler note (Nov 2026)', () => {
@@ -520,7 +526,12 @@ describe('Nov 12 2026 rules: programs away from the hubs, plain words, healthy d
   const HEADER_TONE = { normal: 'calm', minor: 'watch', significant: 'disrupted' };
   /** The header's FAA column alone: networkStatus over the same /api/faa input, no on-time, no index. */
   const headerFaaTone = (faa) => HEADER_TONE[networkStatus({ hubOtps: {}, iropsScore: null, faaIndex: buildFaaIndex(faa.map(withoutRoutineClosures)), hubCodes: BRIEF_HUBS }).level];
-  const briefFaaTone = (facts) => maxTone(...facts.filter((f) => f.kind === 'faa').map((f) => f.toneFloor));
+  // The brief's FAA facts as the header weighs them (Nov 22 2026): their own floors, and two or more
+  // hubs they mark impaired make a watch (with no on-time and no index, nothing else counts).
+  const briefFaaTone = (facts) => {
+    const faa = facts.filter((f) => f.kind === 'faa');
+    return maxTone(...faa.map((f) => f.toneFloor), new Set(faa.map((f) => f.impairs).filter(Boolean)).size >= 2 ? 'watch' : 'calm');
+  };
 
   for (const name of names) {
     it(`${name}: the tone floor from FAA programs equals the header's FAA level from the same input`, () => {
@@ -532,15 +543,15 @@ describe('Nov 12 2026 rules: programs away from the hubs, plain words, healthy d
   it('the parity holds for a stop, a delay program and a closure away from the hubs, and at a hub', () => {
     const fx = fixture('calm-afternoon');
     const at = (code, type, extra = {}) => [{ airportCode: code, programs: [{ type, reason: 'WX:Thunderstorms', endTime: '2026-11-11T03:00:00Z', ...extra }], groundStop: type === 'ground_stop', groundDelay: type === 'ground_delay', closure: type === 'closure', delays: [] }];
-    for (const faa of [at('SEA', 'ground_stop'), at('SEA', 'ground_delay', { avgDelay: 40 }), at('BOS', 'closure', { reason: 'snow removal' }), at('EWR', 'ground_delay'), at('EWR', 'ground_stop'), at('ORD', 'departure_delay')]) {
+    const long = { minDelay: 46, maxDelay: 60 };
+    for (const faa of [at('SEA', 'ground_stop'), at('SEA', 'ground_delay', { avgDelay: 40 }), at('BOS', 'closure', { reason: 'snow removal' }), at('EWR', 'ground_delay'), at('EWR', 'ground_stop'), at('ORD', 'departure_delay'),
+      [...at('EWR', 'ground_delay'), ...at('SFO', 'ground_delay')], [...at('EWR', 'departure_delay', long), ...at('ORD', 'arrival_delay', long)], [...at('EWR', 'arrival_delay'), ...at('ORD', 'arrival_delay')]]) {
       const facts = build(fx, { faa }).facts;
       expect(briefFaaTone(facts), JSON.stringify(faa)).toBe(headerFaaTone(faa));
     }
-    // Known divergence, reported not fixed: the header's FAA column has no arrival-delay branch
-    // (hubProgramMarker), while a hub's arrival delays are a watch here.
-    const arr = at('EWR', 'arrival_delay');
-    expect(headerFaaTone(arr)).toBe('calm');
-    expect(briefFaaTone(build(fx, { faa: arr }).facts)).toBe('watch');
+    // The divergence reported on Nov 12 (the header had no arrival-delay branch) is gone: both read
+    // a hub's arrival delays through faaItemImpairsHub (Nov 22 2026).
+    expect(headerFaaTone([...at('EWR', 'arrival_delay', long), ...at('ORD', 'arrival_delay', long)])).toBe('watch');
   });
 
   it('the specimen: Seattle stays a fact, calm, after every fact about the hubs; tomorrow\'s possible hub programs are calm and last', () => {
@@ -581,7 +592,12 @@ describe('Nov 12 2026 rules: programs away from the hubs, plain words, healthy d
       const { facts } = build(fx);
       const order = JSON.parse(buildBriefUserMessage(facts, nowMs).split('FACTS:\n')[1]).map((f) => f.id);
       const firstAway = order.findIndex((id) => isNonHubProgramFact(byId(facts)[id]));
-      if (computeTone(facts) === 'calm' && order.includes('otp.floor')) expect(order[0]).toBe('otp.floor');
+      // A calm day with nothing wrong at a hub opens with the on-time story (the trailing hub, then
+      // the others); with one hub impaired (Nov 22 2026) that hub's most severe fact opens it.
+      const story = facts.find((f) => f.outlier === true)?.id ?? 'otp.floor';
+      const impaired = impairedHubs(facts);
+      if (computeTone(facts) === 'calm' && impaired.length === 0 && order.includes('otp.floor')) expect(order[0]).toBe(story);
+      if (computeTone(facts) === 'calm' && impaired.length === 1) expect(byId(facts)[order[0]].impairs).toBe(impaired[0]);
       if (firstAway < 0) return;
       for (const f of facts) {
         const i = order.indexOf(f.id);
@@ -697,7 +713,8 @@ describe('Nov 12 2026 rules: programs away from the hubs, plain words, healthy d
         : a));
       const gdp = byId(build(fx, { faa }).facts)['faa.active.EWR.gdp'];
       expect(gdp.statement).toBe('The FAA has a ground delay program in effect for flights heading to Newark (EWR), because of heavy traffic. Those flights are held at their departure airport; delays average 30 minutes.');
-      expect(gdp.toneFloor).toBe('watch');
+      // The header still counts it, so it still impairs Newark (calm on its own since Nov 22 2026).
+      expect(gdp).toMatchObject({ toneFloor: 'calm', impairs: 'EWR' });
     });
   });
 });
@@ -705,7 +722,7 @@ describe('Nov 12 2026 rules: programs away from the hubs, plain words, healthy d
 describe('Nov 12 2026, round 2: tomorrow is not tonight; the lowest hub only when it is an outlier', () => {
   const at = (iso) => Date.parse(iso);
 
-  describe('rule 1: a possible hub program sets the tone only when its window opens today', () => {
+  describe('rule 1: a possible hub program is news only when its window opens today (and never a tone, Nov 22 2026)', () => {
     // 8:20 PM ET Nov 11 (01:20Z Nov 12), the Nov 12 plan.
     const fx = fixture('plan-times-evening');
     const withPlan = (event, airports, url = fx.sources.nas.advisoryUrl) => build(fx, {
@@ -713,13 +730,15 @@ describe('Nov 12 2026, round 2: tomorrow is not tonight; the lowest hub only whe
       nas: { ...fx.sources.nas, advisoryUrl: url, planned: [{ time: '', event, decoded: event, affectedAirports: airports, type: 'terminal' }] },
     }).facts;
     const planned = (facts) => facts.find((f) => f.id === 'faa.planned.EWR');
-    it('later today and tonight after midnight: watch; from 6 AM tomorrow: calm', () => {
-      // 11:00 PM ET tonight
-      expect(planned(withPlan('AFTER 0400\t-EWR GROUND STOP POSSIBLE', ['EWR']))).toEqual(expect.objectContaining({ toneFloor: 'watch', severity: 22 }));
-      // 5:59 AM ET tomorrow: the coming night, no day word, still a watch
+    it('later today and tonight after midnight: a line and a rewrite; from 6 AM tomorrow: last, and no change', () => {
+      // 11:00 PM ET tonight. A possible program never sets the tone (Nov 22 2026); it keeps its
+      // severity and its place in the change key.
+      expect(planned(withPlan('AFTER 0400\t-EWR GROUND STOP POSSIBLE', ['EWR']))).toEqual(expect.objectContaining({ toneFloor: 'calm', severity: 22 }));
+      // 5:59 AM ET tomorrow: the coming night, no day word, still news tonight
       const night = planned(withPlan('AFTER 1059\t-EWR GROUND STOP POSSIBLE', ['EWR']));
       expect(night.statement).toContain('after 5:59 AM ET.');
-      expect(night.toneFloor).toBe('watch');
+      expect(night).toEqual(expect.objectContaining({ toneFloor: 'calm', severity: 22 }));
+      expect(night.material).toMatch(/^planned:/);
       // 6:00 AM ET tomorrow: "tomorrow", calm, last
       const morning = planned(withPlan('AFTER 1100\t-EWR GROUND STOP POSSIBLE', ['EWR']));
       expect(morning.statement).toContain('tomorrow after 6:00 AM ET.');
@@ -727,10 +746,12 @@ describe('Nov 12 2026, round 2: tomorrow is not tonight; the lowest hub only whe
       // A window open now that runs into tomorrow is not "later": it is possible now.
       const open = planned(withPlan('UNTIL 1500\t-EWR GROUND STOP POSSIBLE', ['EWR']));
       expect(open.statement).toContain('until 10:00 AM ET tomorrow');
-      expect(open.toneFloor).toBe('watch');
+      expect(open).toEqual(expect.objectContaining({ toneFloor: 'calm', severity: 22 }));
     });
-    it('planned-only-watch keeps its watch; its tomorrow twin is calm', () => {
-      expect(computeTone(build(fixture('planned-only-watch')).facts)).toBe('watch');
+    it('planned-only-watch is calm since Nov 22 2026 (it was a watch); its tomorrow twin is calm too, and last', () => {
+      const tonight = build(fixture('planned-only-watch')).facts;
+      expect(computeTone(tonight)).toBe('calm');
+      expect(byId(tonight)['faa.planned.EWR'].material).toMatch(/^planned:/);
       const twin = build(fixture('planned-only-tomorrow')).facts;
       expect(computeTone(twin)).toBe('calm');
       expect(byId(twin)['faa.planned.EWR'].statement).toBe("The FAA's operations plan says a ground stop or ground delay program is possible for flights into Newark (EWR) tomorrow after 10:00 AM ET. It is not in effect.");
@@ -810,8 +831,9 @@ describe('Nov 13 2026: far fewer flights in the air than usual sets the tone', (
       material: 'airnorm:below:disrupted:70',
     });
     expect(isAirborneShortfallFact(facts[0])).toBe(true);
-    // Nothing else in these payloads reaches "disrupted": without the shortfall the tone was "watch".
-    expect(computeTone(facts.filter((f) => f.id !== 'air.normal'))).toBe('watch');
+    // Nothing else in these payloads reaches "disrupted": without the shortfall the tone would be
+    // "calm" since Nov 22 2026 (one hub's delay program, San Francisco, is named, not a tone).
+    expect(computeTone(facts.filter((f) => f.id !== 'air.normal'))).toBe('calm');
     // No FAA feed carried the nationwide stop, and no fact invents it.
     expect(facts.map((f) => f.statement).join(' ')).not.toMatch(/nationwide|all airports/i);
   });

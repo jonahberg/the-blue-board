@@ -27,6 +27,7 @@ import {
   hubOtpDescription,
   hubReadingAge,
   hubReadingDayOffset,
+  networkInputs,
   networkLabel,
 } from '@/lib/hub-health.js';
 import { networkUnknownText } from '@/lib/faa-freshness.js';
@@ -59,19 +60,25 @@ function chipClick(follow: (intent: DeepLinkIntent) => void, href: string) {
 
 export function HubHealthStrip() {
   const follow = useFollowDeepLink();
-  const { hubs } = useHubHealth();
+  const { hubs, byHub } = useHubHealth();
   const { faaIndex, faaUnknownSince } = useWeather();
   const { homeAirport } = usePrefs();
   const irops = useIrops();
 
   const readings = hubs.map((entry) => entry.otp).filter((otp): otp is number => otp !== null);
-  // The network chip follows the same networkStatus() rule as the ticker and the IROPS
-  // badge, so it cannot read "Smooth Ops" beside a ground stop (F5/F33/F68).
-  const network = networkLabel(readings, {
-    iropsScore: irops.score,
-    faaIndex,
-    hubCodes: HUB_ORDER,
-  }) as { avg: number; label: string; severity: Severity; level: string } | null;
+  const nowMs = Date.now();
+  // Why a hub has no figure, and whether a server reading is yesterday's board, come from the
+  // server's own metrics (v1.28.0). Before it answers, and on a payload without the counts, the
+  // chip keeps its bare dash (src/lib/hub-health.js hubChipNoFigure).
+  const hubMetrics = irops.data?.hubMetrics ?? null;
+  // The network chip follows the same networkStatus() rule as the ticker and the brief's tone, from
+  // the same inputs (networkInputs: hub-keyed readings, which are yesterday's, the FAA index, the
+  // index, the hubs' cancellation rates), so it cannot read "Smooth Ops" beside a ground stop
+  // (F5/F33/F68), and one hub's delay program alone keeps it at "Smooth Ops" as it keeps the brief calm.
+  const network = networkLabel(
+    byHub,
+    networkInputs({ hubOtps: byHub, hubMetrics, faaIndex, iropsScore: irops.score, nowMs, hubCodes: HUB_ORDER }),
+  ) as { avg: number; label: string; severity: Severity; level: string } | null;
   // A stale FAA answer empties faaIndex, which reads exactly like a calm day. When nothing else
   // says the network is disrupted, the chip says the FAA picture is unknown instead of "Smooth
   // Ops". The time is held from the moment it went stale, so this polite region changes its words
@@ -86,11 +93,6 @@ export function HubHealthStrip() {
     unknown: Boolean(unknown),
   });
   const loading = readings.length === 0 && irops.loading;
-  const nowMs = Date.now();
-  // Why a hub has no figure, and whether a server reading is yesterday's board, come from the
-  // server's own metrics (v1.28.0). Before it answers, and on a payload without the counts, the
-  // chip keeps its bare dash (src/lib/hub-health.js hubChipNoFigure).
-  const hubMetrics = irops.data?.hubMetrics ?? null;
 
   return (
     <div

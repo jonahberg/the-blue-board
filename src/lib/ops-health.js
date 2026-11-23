@@ -5,28 +5,76 @@
 // "SIGNIFICANT DISRUPTION" (35.3) and a ticker reading "Elevated irregular ops" — three
 // labels from two metrics. On-time-of-operated cannot see cancellations or the long tail
 // of delays; the IROPS index can. So there is ONE definition, `networkStatus()`, and the
-// strip chip (hub-health.js networkLabel), the ticker (deriveOpsHealth) and the IROPS
-// badge (irops-score.js bands) all agree with it.
+// strip chip (hub-health.js networkLabel), the ticker (deriveOpsHealth) and the brief's tone
+// (brief-facts.js, through its `net.status` fact) all agree with it.
 //
-// Network status = the WORST of three signals:
+// Network status (Nov 22 2026: "Some Delays" means trouble that is network-wide, not one hub's
+// ordinary bad afternoon):
 //
-//   level        label         IROPS index (irops-score.js)    FAA programs at a UA hub     hub on-time
-//   normal       Smooth Ops    < 20   NORMAL OPERATIONS         none                         avg > 70%, every hub ≥ 50%
-//   minor        Some Delays   20–40  MINOR DISRUPTION          GDP / departure delays       avg ≤ 70%
-//   significant  Disrupted     ≥ 40   SIGNIFICANT DISRUPTION    ground stop / closure        any hub < 50%
+//   significant  Disrupted    any of: a ground stop or closure at a United hub (hubProgramMarker red),
+//                             any hub under 50% on time, the IROPS index at 40 or more
+//   minor        Some Delays  any of: two or more hubs IMPAIRED NOW; exactly one impaired hub while
+//                             the IROPS index is NETWORK_WATCH_INDEX_WITH_ONE_HUB (30) or more; the
+//                             average of the hubs' on-time readings at 70% or less
+//   normal       Smooth Ops   otherwise
+//
+// A hub is IMPAIRED NOW (hubImpairments) when any of:
+//   - a ground delay program is in effect for flights into it ('gdp');
+//   - its on-time reading for TODAY's board is under 70% ('otp'; before 06:00 hub-local the
+//     boards still show yesterday, defaultSchedDayOffset, and a yesterday reading never counts);
+//   - the FAA reports departure or arrival delays there starting at HUB_IMPAIRING_FAA_DELAY_MIN
+//     (45) minutes or more ('dep' / 'arr': the reported lower bound, `minDelay`; a delay with no
+//     lower bound, or only an average, does not count);
+//   - 10% or more of today's departures on a current board are confirmed canceled ('cxl',
+//     hubCancelRates in hub-health.js, the measure behind the brief's `cxl.<HUB>` facts).
+// One impaired hub is still named everywhere a hub is (its own chip keeps its colour, the brief
+// names it); it does not turn the network amber. A possible or planned program, weather, FAA delays
+// under 45 minutes, yesterday's readings, airports that are not United hubs, and the IROPS index in
+// its minor band (20–40) never set "Some Delays" by themselves.
+//
+// Until Nov 22 2026 any one of a GDP or departure delays at a hub, or the index in its minor band,
+// was "Some Delays", and the brief's tone followed: over Nov 19–22 the brief read WATCH for 199 of
+// 219 briefs (91%), 24 of them under a headline saying "normal". The IROPS card's own band label
+// (NORMAL / MINOR / SIGNIFICANT at 20 / 40, irops-score.js) is the index's scale and did not change.
 //
 // The IROPS bands were < 5 / < 15 until v1.12.0 (Oct 3 2026), when a calm Saturday — every hub
 // 83–96% on-time, no programs, no confirmed cancellations — read "Disrupted". The constants live in
-// irops-score.js (IROPS_MINOR_AT / IROPS_SIGNIFICANT_AT); the FAA and on-time columns did not move.
+// irops-score.js (IROPS_MINOR_AT / IROPS_SIGNIFICANT_AT).
 //
-// The FAA column is hubProgramMarker()'s amber/red — the same call the per-hub chips use. A
-// "closure" there is a real one: routine NOTAM closures (curfews, PPR/GA, runway-only) are
-// screened inside hubProgramMarker() (withoutRoutineClosures, below).
+// The red FAA test is hubProgramMarker() — the same call the per-hub chips use. A "closure" there
+// is a real one: routine NOTAM closures (curfews, PPR/GA, runway-only) are screened inside
+// hubProgramMarker() (withoutRoutineClosures, below), and so in hubImpairments.
 // The ticker is advisory whenever the level is not normal, so it can never claim "all
-// systems normal" while the strip or the IROPS badge says otherwise.
+// systems normal" while the strip says otherwise.
 
 import { iropsScoreCls } from './irops-score.js';
 import { normalizeFaaType } from './faa-context.js';
+
+/**
+ * With exactly one United hub impaired, the network is "Some Delays" only when the IROPS index is
+ * at least this (owner-decided Nov 22 2026). The index alone sits in its minor band (20–40) for most
+ * of an ordinary evening and night: ordinary full-day scores ran 24–33 and bad days 51–82 over
+ * Nov 12–22 2026, and the minor band held the brief at watch in 260 briefs since Nov 12. Replaying
+ * the stored facts of every brief of Nov 12–22 2026 through this rule, the share of each day's hours
+ * at watch fell from 27–100% to 0–28%, with every disrupted hour unchanged.
+ */
+export const NETWORK_WATCH_INDEX_WITH_ONE_HUB = 30;
+
+/**
+ * FAA departure or arrival delays impair a hub only when their reported lower bound is at least
+ * this many minutes (owner-decided Nov 22 2026). Since Nov 12 2026 FAA departure delays at a hub had
+ * held the brief at watch in 110 briefs and arrival delays in 5, whatever their length.
+ */
+export const HUB_IMPAIRING_FAA_DELAY_MIN = 45;
+
+/** A hub whose on-time reading for today's board is under this is impaired (the brief's soft hub). */
+export const HUB_IMPAIRED_OTP_BELOW = 70;
+
+/** A hub with this share of today's departures confirmed canceled is impaired (the brief's `cxl.<HUB>` watch line). */
+export const HUB_IMPAIRING_CANCEL_RATE = 0.1;
+
+/** Fewer confirmed cancellations than this at one hub is not a rate worth reading (the brief's `cxl.<HUB>` floor). */
+export const HUB_CANCEL_MIN_CONFIRMED = 3;
 
 // ── Routine closures ──
 // The FAA feed lists NOTAM closures that are part of an airport's normal week: nightly curfews
@@ -146,6 +194,88 @@ export function hubProgramMarker(faaIndex, hub) {
   return null;
 }
 
+/**
+ * True when one FAA program or delay entry impairs the hub it is listed at: a ground delay program,
+ * or departure / arrival delays whose reported lower bound (`minDelay`) is HUB_IMPAIRING_FAA_DELAY_MIN
+ * or more. A delay with no lower bound (only a maximum, an average or a bare flag) does not.
+ * @param {{type?: unknown, reason?: unknown, minDelay?: unknown}|null|undefined} item
+ */
+export function faaItemImpairsHub(item) {
+  const type = normalizeFaaType(item?.type || item?.reason);
+  if (type.includes('ground delay') || type.includes('gdp')) return true;
+  if (!type.includes('departure delay') && !type.includes('arrival delay')) return false;
+  const min = item?.minDelay === null || item?.minDelay === undefined || item?.minDelay === '' ? NaN : Number(item.minDelay);
+  return Number.isFinite(min) && min >= HUB_IMPAIRING_FAA_DELAY_MIN;
+}
+
+/**
+ * Why the FAA picture impairs one hub: 'gdp', 'dep', 'arr' (see faaItemImpairsHub), each at most
+ * once. Read from the same /api/faa entry the hub chip reads, minus routine closures.
+ * @param {object} faaIndex
+ * @param {string} hub
+ * @returns {Array<'gdp'|'dep'|'arr'>}
+ */
+export function hubFaaImpairments(faaIndex, hub) {
+  const entry = withoutRoutineClosures(faaIndex?.[hub]);
+  if (!entry || typeof entry !== 'object') return [];
+  const items = [
+    ...(Array.isArray(entry.programs) ? entry.programs : []),
+    ...(Array.isArray(entry.delays) ? entry.delays : []),
+  ];
+  const out = new Set();
+  if (entry.groundDelay) out.add('gdp');
+  for (const item of items) {
+    if (!faaItemImpairsHub(item)) continue;
+    const type = normalizeFaaType(item?.type || item?.reason);
+    out.add(type.includes('departure delay') ? 'dep' : type.includes('arrival delay') ? 'arr' : 'gdp');
+  }
+  return ['gdp', 'dep', 'arr'].filter((r) => out.has(/** @type {any} */ (r)));
+}
+
+/**
+ * The United hubs impaired now, and why (see the table at the top of this file).
+ * @param {object} opts
+ * @param {Record<string, number>} [opts.hubOtps]  on-time % per hub.
+ * @param {Record<string, number>} [opts.hubDayOffsets]  -1 for a hub whose reading is yesterday's
+ *   board (defaultSchedDayOffset); a hub missing here is today's.
+ * @param {Record<string, number>} [opts.hubCancelRates]  confirmed-canceled share of today's
+ *   departures on a current board (hub-health.js hubCancelRates).
+ * @param {object} [opts.faaIndex]
+ * @param {string[]} [opts.hubCodes]  the United hubs whose FAA programs count.
+ * @returns {Record<string, Array<'gdp'|'dep'|'arr'|'otp'|'cxl'>>}  only impaired hubs, in hub order.
+ */
+export function hubImpairments({ hubOtps = {}, hubDayOffsets = {}, hubCancelRates = {}, faaIndex = {}, hubCodes = [] } = {}) {
+  const hubs = [...new Set([...(hubCodes || []), ...Object.keys(hubOtps || {}), ...Object.keys(hubCancelRates || {})])];
+  /** @type {Record<string, Array<'gdp'|'dep'|'arr'|'otp'|'cxl'>>} */
+  const out = {};
+  for (const hub of hubs) {
+    /** @type {Array<'gdp'|'dep'|'arr'|'otp'|'cxl'>} */
+    const reasons = (hubCodes || []).includes(hub) ? [...hubFaaImpairments(faaIndex, hub)] : [];
+    const raw = hubOtps?.[hub];
+    const otp = raw === null || raw === undefined || raw === '' ? NaN : Number(raw);
+    if (Number.isFinite(otp) && otp < HUB_IMPAIRED_OTP_BELOW && Number(hubDayOffsets?.[hub]) !== -1) reasons.push('otp');
+    const rate = Number(hubCancelRates?.[hub]);
+    if (Number.isFinite(rate) && rate >= HUB_IMPAIRING_CANCEL_RATE) reasons.push('cxl');
+    if (reasons.length) out[hub] = reasons;
+  }
+  return out;
+}
+
+/**
+ * "Some Delays" or not, from how widely the network is hurting (the table at the top of this file):
+ * two or more impaired hubs; one impaired hub with the IROPS index at NETWORK_WATCH_INDEX_WITH_ONE_HUB
+ * or more; or the average on-time reading at 70% or less. The "Disrupted" tests are separate
+ * (networkStatus) and unchanged.
+ * @param {{impairedHubs: number, iropsScore?: number|null, avgOtp?: number|null}} input
+ * @returns {'normal'|'minor'}
+ */
+export function networkBreadthLevel({ impairedHubs, iropsScore = null, avgOtp = null }) {
+  if (impairedHubs >= 2) return 'minor';
+  if (impairedHubs === 1 && iropsScore !== null && Number.isFinite(iropsScore) && iropsScore >= NETWORK_WATCH_INDEX_WITH_ONE_HUB) return 'minor';
+  if (avgOtp !== null && Number.isFinite(avgOtp) && avgOtp <= 70) return 'minor';
+  return 'normal';
+}
+
 const LEVEL_RANK = { normal: 0, minor: 1, significant: 2 };
 const LEVEL_PRESENTATION = {
   normal: { severity: 'green', label: 'Smooth Ops', color: '#22c55e' },
@@ -157,15 +287,18 @@ const LEVEL_PRESENTATION = {
  * The network status — see the table at the top of this file.
  *
  * @param {object} opts
- * @param {Record<string,number>} [opts.hubOtps]  on-time % per hub.
+ * @param {Record<string,number>} [opts.hubOtps]  on-time % per hub, keyed by hub code.
  * @param {object} [opts.faaIndex]  faaDelayIndex ({ code: airportEntry }).
  * @param {string[]} [opts.hubCodes]  UA hub IATA codes whose FAA programs count.
  * @param {number|string|null} [opts.iropsScore]  IROPS severity index (0-100), null when unknown.
+ * @param {Record<string,number>} [opts.hubDayOffsets]  -1 for a hub whose reading is yesterday's board.
+ * @param {Record<string,number>} [opts.hubCancelRates]  hub-health.js hubCancelRates().
  * @returns {{level:'normal'|'minor'|'significant', severity:'green'|'amber'|'red', label:string,
  *   color:string, avg:number|null, worstHub:string|null, worstOtp:number|null,
- *   programs:Array<{hub:string, kind:'GS'|'GDP', avgDelay:number|null}>, iropsScore:number|null}}
+ *   programs:Array<{hub:string, kind:'GS'|'GDP', avgDelay:number|null}>, iropsScore:number|null,
+ *   impaired: Record<string, Array<'gdp'|'dep'|'arr'|'otp'|'cxl'>>, impairedHubs: string[]}}
  */
-export function networkStatus({ hubOtps = {}, faaIndex = {}, hubCodes = [], iropsScore = null } = {}) {
+export function networkStatus({ hubOtps = {}, faaIndex = {}, hubCodes = [], iropsScore = null, hubDayOffsets = {}, hubCancelRates = {} } = {}) {
   let level = 'normal';
   const raise = (to) => { if (LEVEL_RANK[to] > LEVEL_RANK[level]) level = to; };
 
@@ -180,23 +313,20 @@ export function networkStatus({ hubOtps = {}, faaIndex = {}, hubCodes = [], irop
     if (v < worstOtp) { worstOtp = v; worstHub = hub; }
   }
   const avg = otps.length ? Math.round(otps.reduce((a, b) => a + b, 0) / otps.length) : null;
+
+  // ── Disrupted (unchanged): a hub under 50%, a red chip (ground stop / closure), index 40+ ──
   if (worstHub !== null && worstOtp < 50) raise('significant');
-  else if (avg !== null && avg <= 70) raise('minor');
-
-  // FAA programs: the per-hub chip's own severity.
   for (const hub of hubCodes) {
-    const marker = hubProgramMarker(faaIndex, hub);
-    if (marker) raise(marker.severity === 'red' ? 'significant' : 'minor');
+    if (hubProgramMarker(faaIndex, hub)?.severity === 'red') raise('significant');
   }
-
-  // IROPS: the badge's own bands.
   const n = iropsScore === null || iropsScore === undefined || iropsScore === '' ? NaN : Number(iropsScore);
   const score = Number.isFinite(n) ? n : null;
-  if (score !== null) {
-    const cls = iropsScoreCls(score);
-    if (cls === 'high') raise('significant');
-    else if (cls === 'med') raise('minor');
-  }
+  if (score !== null && iropsScoreCls(score) === 'high') raise('significant');
+
+  // ── Some Delays: network-wide trouble (networkBreadthLevel) ──
+  const impaired = hubImpairments({ hubOtps, hubDayOffsets, hubCancelRates, faaIndex, hubCodes });
+  const impairedHubs = Object.keys(impaired);
+  raise(networkBreadthLevel({ impairedHubs: impairedHubs.length, iropsScore: score, avgOtp: avg }));
 
   return {
     level,
@@ -206,6 +336,8 @@ export function networkStatus({ hubOtps = {}, faaIndex = {}, hubCodes = [], irop
     worstOtp: worstHub === null ? null : worstOtp,
     programs: extractHubPrograms(faaIndex, hubCodes),
     iropsScore: score,
+    impaired,
+    impairedHubs,
   };
 }
 
@@ -222,21 +354,57 @@ function programPhrase(kind, hub, avgDelay = null) {
   return `ground delay program for flights into ${hub}${avg}`;
 }
 
+/** "EWR", "EWR and IAH", "EWR, IAH and ORD". */
+function joinCodes(codes) {
+  return codes.length <= 2 ? codes.join(' and ') : `${codes.slice(0, -1).join(', ')} and ${codes[codes.length - 1]}`;
+}
+
+/**
+ * One impaired hub's trouble in the ticker's words, most concrete reason first: "Ground delay
+ * program for flights into EWR (avg 105 min)", "Departure delays at EWR", "EWR on-time 67%",
+ * "Cancellations at EWR".
+ * @param {string} hub
+ * @param {Array<'gdp'|'dep'|'arr'|'otp'|'cxl'>} reasons
+ * @param {{programs: Array<{hub: string, kind: string, avgDelay: number|null}>, hubOtps?: Record<string, number>, faaIndex?: object}} ctx
+ */
+function hubTroublePhrase(hub, reasons, { programs, hubOtps = {}, faaIndex = {} }) {
+  if (reasons.includes('gdp')) {
+    // The average from the legacy delays list (extractHubPrograms), else from programs[].
+    const listed = (Array.isArray(faaIndex?.[hub]?.programs) ? faaIndex[hub].programs : [])
+      .find((x) => normalizeFaaType(x?.type || x?.reason).includes('ground delay'));
+    const avg = programs.find((x) => x.hub === hub && x.kind === 'GDP')?.avgDelay ?? numOrNull(listed?.avgDelay);
+    const text = programPhrase('GDP', hub, avg);
+    return text[0].toUpperCase() + text.slice(1);
+  }
+  if (reasons.includes('dep')) return `Departure delays at ${hub}`;
+  if (reasons.includes('arr')) return `Arrival delays at ${hub}`;
+  if (reasons.includes('otp')) return `${hub} on-time ${Math.round(Number(hubOtps[hub]))}%`;
+  return `Cancellations at ${hub}`;
+}
+
 /**
  * Derive the ticker's health state from `networkStatus()`: advisory whenever the network
  * is not normal, with the most specific fact as the text. A ground delay program's text leads
  * with the network level's own word, so it says "Some delays:" while the header pill reads "Some
  * Delays" and "Disrupted:" only when the network is ("Some delays: ground delay program for
  * flights into SFO (avg 62 min)"); a ground stop is always "Disrupted:".
+ *
+ * At "Smooth Ops" with one hub impaired (Nov 22 2026) there is no advisory, but `note` names that
+ * hub's trouble ("Ground delay program for flights into EWR (avg 105 min)"), so the ticker can say
+ * it in a plain line instead of "All systems normal" (ticker.js).
  * @param {object} opts  as networkStatus().
- * @returns {{level:'normal'|'advisory', text:string}}
+ * @returns {{level:'normal'|'advisory', text:string, note?: string}}
  */
 export function deriveOpsHealth(opts = {}) {
   const status = networkStatus(opts);
-  if (status.level === 'normal') return { level: 'normal', text: '' };
+  const { programs, worstHub, worstOtp, iropsScore, avg, impaired, impairedHubs } = status;
+  if (status.level === 'normal') {
+    const [hub] = impairedHubs;
+    if (!hub) return { level: 'normal', text: '' };
+    return { level: 'normal', text: '', note: hubTroublePhrase(hub, impaired[hub], { programs, hubOtps: opts.hubOtps, faaIndex: opts.faaIndex }) };
+  }
   const prefix = status.level === 'significant' ? 'Disrupted' : 'Some delays';
 
-  const { programs, worstHub, worstOtp, iropsScore, avg } = status;
   const gs = programs.find((p) => p.kind === 'GS');
   if (gs) return { level: 'advisory', text: `Disrupted: ${programPhrase('GS', gs.hub)}` };
 
@@ -247,24 +415,31 @@ export function deriveOpsHealth(opts = {}) {
   const gdp = programs.find((p) => p.kind === 'GDP');
   if (gdp) return { level: 'advisory', text: `${prefix}: ${programPhrase('GDP', gdp.hub, gdp.avgDelay)}` };
 
-  // A closure or departure-delay program (red/amber chip) with no GS/GDP entry, or a stop or delay
-  // program listed only under `programs`.
-  const marked = (opts.hubCodes || [])
+  // A closure (red chip) with no GS/GDP entry, or a stop listed only under `programs`.
+  const red = (opts.hubCodes || [])
     .map((hub) => ({ hub, marker: hubProgramMarker(opts.faaIndex, hub) }))
-    .find((m) => m.marker);
-
-  const label = marked?.marker.label;
-  const programText = !marked ? ''
-    : label === 'Ground stop' ? programPhrase('GS', marked.hub)
-      : label === 'Ground delay program' ? programPhrase('GDP', marked.hub)
-        : `${label} at ${marked.hub}`;
-  if (marked && marked.marker.severity === 'red') return { level: 'advisory', text: `Disrupted: ${programText}` };
+    .find((m) => m.marker?.severity === 'red');
+  if (red) {
+    const text = red.marker.label === 'Ground stop' ? programPhrase('GS', red.hub) : `${red.marker.label} at ${red.hub}`;
+    return { level: 'advisory', text: `Disrupted: ${text}` };
+  }
   if (iropsScore !== null && iropsScoreCls(iropsScore) === 'high') {
     return { level: 'advisory', text: `Elevated irregular ops — IROPS ${iropsScore}/100` };
   }
-  if (marked) return { level: 'advisory', text: label === 'Ground delay program' ? `${prefix}: ${programText}` : programText };
-  if (iropsScore !== null && iropsScoreCls(iropsScore) === 'med') {
-    return { level: 'advisory', text: `Minor irregular ops — IROPS ${iropsScore}/100` };
+  // A delay program listed only under `programs` (the amber chip's own reading).
+  const amberGdp = (opts.hubCodes || []).find((hub) => hubProgramMarker(opts.faaIndex, hub)?.label === 'Ground delay program');
+  if (amberGdp) return { level: 'advisory', text: `${prefix}: ${programPhrase('GDP', amberGdp)}` };
+
+  // Some Delays: network-wide (networkBreadthLevel). The average when it is the reason, else the
+  // impaired hubs, with the index when one hub and the index together are the reason.
+  if (avg !== null && avg <= 70) return { level: 'advisory', text: `Some delays — hub on-time averaging ${avg}%` };
+  if (impairedHubs.length >= 2) return { level: 'advisory', text: `Some delays at ${joinCodes(impairedHubs)}` };
+  if (impairedHubs.length === 1) {
+    const [hub] = impairedHubs;
+    const phrase = hubTroublePhrase(hub, impaired[hub], { programs, hubOtps: opts.hubOtps, faaIndex: opts.faaIndex });
+    // "Ground delay program…" → "ground delay program…"; "EWR on-time 67%" keeps its code.
+    const lead = /^[A-Z][a-z]/.test(phrase) ? `${phrase[0].toLowerCase()}${phrase.slice(1)}` : phrase;
+    return { level: 'advisory', text: `Some delays: ${lead}${iropsScore !== null ? ` — IROPS ${iropsScore}/100` : ''}` };
   }
-  return { level: 'advisory', text: `Some delays — hub on-time averaging ${avg}%` };
+  return { level: 'advisory', text: 'Some delays' };
 }

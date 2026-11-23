@@ -1,6 +1,6 @@
 {
  "name": "ord-79-variant",
- "description": "The 5:20 PM PT specimen with Chicago O'Hare at 79% (363 of 460): below the healthy line, so its figure and the lowest-hub fact are sent and the hub story can lead, with Seattle riding in the FAA item. Expected tone: watch, from the index and the possible hub programs.",
+ "description": "The 5:20 PM PT specimen with Chicago O'Hare at 79% (363 of 460): below the healthy line, so its figure and the lowest-hub fact are sent and the hub story can lead, with Seattle riding in the FAA item. Expected tone: calm since Nov 22 2026 (it was watch, from the index in its minor band, which never sets the tone alone now; the possible hub programs open tomorrow).",
  "nowIso": "2026-11-12T01:20:00Z",
  "sources": {
   "irops": {
@@ -761,6 +761,6 @@
   }
  },
  "expect": {
-  "tone": "watch"
+  "tone": "calm"
  }
 }
