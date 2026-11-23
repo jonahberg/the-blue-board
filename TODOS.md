@@ -118,7 +118,8 @@ Open work, checked against the code on 2026-11-10. Each entry names the file it 
   Drop it in the next migration.
 - [x] `api/irops.ts`: Fixed Nov 23 2026: the error branch names its hub by the loop index. Was:
   `results.indexOf(result)`.
-- [ ] `src/lib/delay-risk.js:178`: `roleLabel` is `'at'` on both branches. Inline it, or give
-  destinations their own wording.
+- [x] `src/lib/delay-risk.js`: Fixed Nov 23 2026: `roleLabel` is gone and the five FAA factors
+  read "at <airport>" for origin and destination alike, the wording they already had
+  (`tests/delay-risk.test.js` pins both). Was: `'at'` on both branches of a ternary.
 - [ ] Waitlist: decide whether to stay on hand-rolled Supabase + Resend or move to a hosted list
   (Loops, Resend Audiences, ConvertKit).
