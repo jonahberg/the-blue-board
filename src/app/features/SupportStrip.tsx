@@ -18,6 +18,14 @@
  *   - the same analytics: `donate_prompt` shown / donate / later, and the link's
  *     `data-support="deep-use-prompt"` counted as a `support_click` like every placement.
  *
+ * Since Nov 22 2026 it may also come sooner than T1/T2 (`useSupportStripMoment`, rules in
+ * src/lib/support-moment.js): two seconds after the second flight's panel is closed (two or
+ * more distinct flights opened on this page load, none open now), or after 60 s on a visit that
+ * arrived from a social post. The latch is rolled at that
+ * moment, the same dice as ever; on a visit it picks the email ask or the email strip, nothing
+ * shows early and those wait for T1/T2. Each `donate_prompt` event says which moment brought the
+ * strip up: `trigger` is 'time', 'clicks', 'flights' or 'post', never a URL or a flight number.
+ *
  * What it says comes from src/lib/cover-a-day.js and is true or absent. A payment covers the day
  * it is given, or the next open day after it, so the button names that day: "Cover today · $17"
  * when /api/support-status says today is open (for today's Central date), "Cover tomorrow · $17"
@@ -30,8 +38,9 @@
  *
  * This component also keeps that count: it is always mounted, so it watches the flight panel's
  * selection and adds one per new flight opened (the same flight twice in one page load is one).
+ * The same page-load count is the second-flight moment above.
  *
- * No live region: a strip arriving after five minutes is not news (DESIGN.md's inventory).
+ * No live region: a strip arriving below the board is not news (DESIGN.md's inventory).
  * `data-no-engagement` keeps its buttons from advancing the click counter that summoned it.
  */
 
@@ -41,9 +50,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { coverButtonHref, supportStripCopy } from '@/lib/cover-a-day.js';
 import { donatePromptRecord } from '@/lib/donate-prompt.js';
+import { supportStripMayShow } from '@/lib/support-moment.js';
 import { track } from '@/lib/track.js';
 import { readFlightCount, recordFlightOpen } from '@/lib/usage-count.js';
-import { deepUseAskThisVisit, useDeepUseTrigger } from '../state/deep-use';
+import { deepUseAskThisVisit, useSupportStripMoment } from '../state/deep-use';
 import { STORAGE_KEYS, safeLocalStorage, writeString } from '../state/storage';
 import { useSupportStatus } from '../state/support-status';
 import { useUi } from '../state/ui';
@@ -56,40 +66,49 @@ function flightKey(selection: ReturnType<typeof useUi>['selection']): string {
   return String(flightIATA || callsign || fr24id || '').trim().toUpperCase();
 }
 
-/** Add one to this month's count each time a flight not yet opened on this page load is opened. */
-function useFlightOpenCount(): void {
+/**
+ * Add one to this month's count each time a flight not yet opened on this page load is opened.
+ * Returns how many distinct flights this page load has opened, and whether one is open now.
+ */
+function useFlightOpenCount(): { distinct: number; open: boolean } {
   const { selection } = useUi();
   const key = flightKey(selection);
   const seen = useRef(new Set<string>());
+  const [distinct, setDistinct] = useState(0);
   useEffect(() => {
     if (!key || seen.current.has(key)) return;
     seen.current.add(key);
     recordFlightOpen(safeLocalStorage());
+    setDistinct(seen.current.size);
   }, [key]);
+  return { distinct, open: selection !== null };
 }
 
 export default function SupportStrip() {
-  useFlightOpenCount();
-  const triggered = useDeepUseTrigger();
+  const flights = useFlightOpenCount();
+  const trigger = useSupportStripMoment(flights.distinct, flights.open);
   const [answered, setAnswered] = useState(false);
 
-  // `triggered` first: the latch is decided when the trigger fires, never before.
-  const asking = triggered && !answered && deepUseAskThisVisit() === 'donate';
+  // `trigger` first: the latch is decided when a moment fires, never before.
+  const asking = trigger !== null && !answered && supportStripMayShow({ ask: deepUseAskThisVisit(), trigger });
   const status = useSupportStatus(asking);
   const copy = asking && status ? supportStripCopy(status, { flightsThisMonth: readFlightCount(safeLocalStorage()) }) : null;
 
   const shownTracked = useRef(false);
   useEffect(() => {
-    if (!copy || shownTracked.current) return;
+    if (!copy || !trigger || shownTracked.current) return;
     shownTracked.current = true;
-    track('donate_prompt', { action: 'shown' });
-  }, [copy]);
+    track('donate_prompt', { action: 'shown', trigger });
+  }, [copy, trigger]);
 
-  const answer = useCallback((outcome: 'later' | 'donate') => {
-    writeString(STORAGE_KEYS.donatePrompt, donatePromptRecord(outcome));
-    track('donate_prompt', { action: outcome });
-    setAnswered(true);
-  }, []);
+  const answer = useCallback(
+    (outcome: 'later' | 'donate') => {
+      writeString(STORAGE_KEYS.donatePrompt, donatePromptRecord(outcome));
+      track('donate_prompt', trigger ? { action: outcome, trigger } : { action: outcome });
+      setAnswered(true);
+    },
+    [trigger],
+  );
 
   if (!copy) return null;
 

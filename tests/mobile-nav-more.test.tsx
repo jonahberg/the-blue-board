@@ -16,7 +16,6 @@ import DisclaimerDialog from '../src/app/features/DisclaimerDialog';
 import { MobileNav } from '../src/app/shell/MobileNav';
 import { PrefsProvider } from '../src/app/state/prefs';
 import { UiProvider } from '../src/app/state/ui';
-import { supportUrl } from '../src/lib/support-link.js';
 
 afterEach(cleanup);
 
@@ -38,18 +37,18 @@ function openMore() {
 }
 
 describe('MobileNav More sheet', () => {
-  it('lists About and the "Help cover a day" support link next to the overflow tabs', () => {
+  it('lists About and the "Help cover a day" row next to the overflow tabs', () => {
     mount();
     const sheet = openMore();
     expect(within(sheet).getByRole('button', { name: 'Sources' })).toBeTruthy();
     expect(within(sheet).getByRole('button', { name: 'About' })).toBeTruthy();
 
-    const support = within(sheet).getByRole('link', { name: 'Help cover a day' });
-    expect(support.getAttribute('href')).toBe(supportUrl('mobile-more'));
-    expect(support.getAttribute('target')).toBe('_blank');
-    expect(support.getAttribute('rel')).toBe('noopener noreferrer');
-    // The delegated support_click tracker labels the placement from this attribute.
-    expect(support.getAttribute('data-support')).toBe('mobile-more');
+    // Since Nov 22 2026 the row opens the "Cover a day" sheet (amounts first) instead of linking
+    // to Stripe; tests/support-sheet.test.tsx follows it into the sheet.
+    expect(within(sheet).queryByRole('link', { name: 'Help cover a day' })).toBeNull();
+    const support = within(sheet).getByRole('button', { name: 'Help cover a day' });
+    expect(support.hasAttribute('href')).toBe(false);
+    expect(support.hasAttribute('data-support')).toBe(false);
   });
 
   it('gives both new rows the same 44px touch target as the tab rows', () => {
@@ -57,7 +56,7 @@ describe('MobileNav More sheet', () => {
     const sheet = openMore();
     for (const el of [
       within(sheet).getByRole('button', { name: 'About' }),
-      within(sheet).getByRole('link', { name: 'Help cover a day' }),
+      within(sheet).getByRole('button', { name: 'Help cover a day' }),
     ]) {
       expect(el.className).toMatch(/\bmin-h-11\b/);
       expect(el.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');

@@ -4,6 +4,14 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.33.0] - 2026-11-22
+
+**The "cover a day" line can come sooner, and the phone's support button shows the amounts before the payment page.**
+
+### Changed
+- **The "cover a day" line under the board can come sooner.** It waited for five minutes of use or a lot of clicking, and from November 12 to 22, 374 of about 4,100 visitors saw it; 4 tapped it and 2 paid. Now it can also appear two seconds after you close the second flight you have looked up (it waits for the close, so it never lands behind that flight's panel), and after one minute instead of five on a visit that came from a post: a link tagged for a post, or one followed from Reddit, FlyerTalk or X. This applies only on visits where the line was already going to be the one ask: the choice is made the same way as before, 60/40 with the email sign-up, so the email ask's share is unchanged, and a "no" is still honoured for 30 days.
+- **On a phone, the support button in the header and "Help cover a day" in the More menu show the amounts first.** The button went straight to the payment page where you type your own amount: it was tapped 11 times from November 12 to 22 and nobody paid. It now opens a small panel with the line about why the site is free, whether today is covered yet (when the site can tell), and $5, $10, $17, $100 and "Other amount", each its own payment link; the $17 names the day it would cover ("Cover today · $17") when that is known, and then a link to this month's days in About.
+
 ## [1.32.0] - 2026-11-22
 
 **On a computer, the header now has a way to help cover a day.**

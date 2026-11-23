@@ -17,6 +17,15 @@ import { track } from './track.js';
 export const SUPPORT_CLICK_EVENT = 'support_click';
 
 /**
+ * Since Nov 22 2026 the phone header's support icon (and the More sheet's "Help cover a day" row)
+ * opens the "Cover a day" sheet instead of going straight to Stripe. Opening it is its own event,
+ * `support_open` with `{from: 'mobile-header'}`, so the funnel reads open → link tap: the links
+ * inside are `support_click`s labelled by amount (`mobile-header-17`), and a `mobile-header`
+ * `support_click` no longer exists.
+ */
+export const SUPPORT_OPEN_EVENT = 'support_open';
+
+/**
  * True for Stripe Payment Links (buy.stripe.com) and for buymeacoffee.com and its subdomains,
  * never for look-alike hosts.
  */
@@ -34,6 +43,17 @@ export function supportPlacement(anchor) {
   if (!anchor || !isSupportUrl(anchor.href)) return null;
   const label = anchor.getAttribute('data-support');
   return label && label.trim() ? label.trim().slice(0, 40) : 'other';
+}
+
+/**
+ * Report one open of the support sheet, labelled like a placement (trimmed, at most 40
+ * characters). Nothing else travels: no URL, no identity.
+ * @param {string} from the opener's placement label, e.g. "mobile-header"
+ * @param {(name: string, data: Record<string, string>) => void} [send] test seam
+ */
+export function trackSupportOpen(from, send = track) {
+  const label = typeof from === 'string' && from.trim() ? from.trim().slice(0, 40) : 'other';
+  send(SUPPORT_OPEN_EVENT, { from: label });
 }
 
 /**

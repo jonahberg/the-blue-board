@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { useFeed } from '../state/feed';
 import { useMediaQuery, useNow } from '../state/hooks';
 import { usePrefs } from '../state/prefs';
+import { openSupportSheet } from '../state/support-sheet';
 import { useUi } from '../state/ui';
 import { useWatch } from '../state/watch';
 import { TOUCH_CONTROL } from './touch-target';
@@ -218,23 +219,21 @@ export function Header({
         {/* Phones only (below `md:`; the labelled link above takes over from `md:`). The ⓘ menu
             sits in the attribution strip, hidden below `md:`, and the phone header has no room
             for a fifth control (13 px spare at 360 px) — so below `md:` this slot is the support
-            link and "What is this dashboard?" moves into the More sheet. Counted as
-            `mobile-header` by the delegated support_click listener (src/lib/support-tracking.js). */}
+            icon and "What is this dashboard?" moves into the More sheet. Since Nov 22 2026 the
+            icon is a button that opens the "Cover a day" sheet, the amounts first
+            (features/SupportSheet.tsx), not a link to Stripe: a tap on it is counted as
+            `support_open` with `from: 'mobile-header'` (state/support-sheet.ts), not as a
+            `support_click`; the sheet's links are the `support_click`s, labelled
+            `mobile-header-<amount>` and `mobile-header-other` (src/lib/support-tracking.js). */}
         <Button
-          asChild
           variant="ghost"
           className={cn(CONTROL, 'p-0 text-muted-foreground md:hidden')}
+          onClick={(event) => openSupportSheet('mobile-header', event.currentTarget)}
+          aria-haspopup="dialog"
+          aria-label="Cover a day of The Blue Board"
+          title="Cover a day of The Blue Board"
         >
-          <a
-            href={supportUrl('mobile-header')}
-            target="_blank"
-            rel="noopener noreferrer"
-            data-support="mobile-header"
-            aria-label="Cover a day of The Blue Board"
-            title="Cover a day of The Blue Board"
-          >
-            <HandHeart aria-hidden="true" />
-          </a>
+          <HandHeart aria-hidden="true" />
         </Button>
 
         <Button

@@ -65,6 +65,8 @@ const Onboarding = lazy(() => import('./features/Onboarding'));
 const WaitlistDialog = lazy(() => import('./features/WaitlistDialog'));
 // The full brief as a sheet, opened from the header row (the row itself is in `shell/Ticker`).
 const BriefSheet = lazy(() => import('./features/BriefSheet'));
+// The phone's "Cover a day" sheet, opened by the header's support icon or the More sheet's row.
+const SupportSheet = lazy(() => import('./features/SupportSheet'));
 const FlightSheet = lazy(() =>
   import('./features/FlightSheet').then((m) => ({ default: m.FlightSheet })),
 );
@@ -215,6 +217,7 @@ function DashboardShell() {
         <FlightSheet />
         <SearchPalette />
         <BriefSheet />
+        <SupportSheet />
       </Suspense>
       <WatchPanel open={watchOpen} onOpenChange={setWatchOpen} />
       <Suspense fallback={null}>

@@ -32,6 +32,7 @@ import { UiProvider, useUi } from '../src/app/state/ui';
 import { DONATE_PROMPT_STORAGE_KEY, DONATE_QUIET_MS, donatePromptRecord } from '../src/lib/donate-prompt.js';
 import { EMAIL_PROMPT_STORAGE_KEY, parseEmailPromptRecord } from '../src/lib/email-prompt.js';
 import { TRIGGER_TIME_MS } from '../src/lib/engagement.js';
+import { POST_TRIGGER_TIME_MS } from '../src/lib/support-moment.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 const EMAIL = 0.61;
@@ -114,6 +115,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  window.history.replaceState(null, '', '/');
   resetDeepUseAsk();
   resetEngagement();
   localStorage.clear();
@@ -317,6 +319,24 @@ describe('one deep-use ask per visit (the latch)', () => {
     pause();
     expect(emailDialog()).not.toBeNull();
     expect(supportAsk()).toBeNull();
+  });
+
+  it('a visit from a post whose latch is email: nothing at 60 s, and the dialog still waits for T1 and a pause', async () => {
+    // The strip's early moment (Nov 22 2026) rolls the latch; on an email visit it does nothing.
+    window.history.replaceState(null, '', '/?utm_source=reddit&utm_medium=social&utm_campaign=thanksgiving');
+    resetDeepUseAsk(() => EMAIL);
+    mount();
+    act(() => vi.advanceTimersByTime(POST_TRIGGER_TIME_MS));
+    await flush();
+    pause();
+    expect(deepUseAskThisVisit()).toBe('email');
+    expect(emailDialog()).toBeNull();
+    expect(supportAsk()).toBeNull();
+    act(() => vi.advanceTimersByTime((TRIGGER_TIME_MS as number) - POST_TRIGGER_TIME_MS - DONATE_QUIET_MS - 1000));
+    pause();
+    expect(emailDialog()).not.toBeNull();
+    expect(supportAsk()).toBeNull();
+    expect(emailEvents()).toEqual(['shown']);
   });
 
   it('with the email ask cooling down, donate is the ask whatever the dice say', async () => {

@@ -13,7 +13,10 @@ import {
   COVER_TIME_ZONE,
   DAILY_COST_CENTS,
   DAILY_COST_USD,
+  CORE_LINE_FLYERS,
   STRIP_COVERED_HORIZON_DAYS,
+  SUPPORT_SHEET_ABOUT_LABEL,
+  SUPPORT_SHEET_TITLE,
   UNCONFIGURED_STATUS,
   addDays,
   allocateDays,
@@ -37,6 +40,7 @@ import {
   parseSupportStatus,
   supportStatusFromRows,
   supportLadder,
+  supportSheetCopy,
   supportStripCopy,
   todayLine,
   zonedDate,
@@ -562,6 +566,93 @@ describe('the amount ladder', () => {
     expect(some.amounts.map((a) => a.text)).toEqual(['$17 · one day']);
     expect(supportLadder('about', { links: { 5: null, 10: null, 17: null, 100: null } })).toBeNull();
     expect(supportLadder('about', { links: {} })).toBeNull();
+  });
+});
+
+describe('supportSheetCopy — the phone\'s "Cover a day" sheet (Nov 22 2026)', () => {
+  const rows = (copy) => copy.ladder.amounts.map((a) => [a.text, a.placement, a.href, a.primary]);
+
+  it('takes the About heading as its title and an About link only in the lib', () => {
+    expect(SUPPORT_SHEET_TITLE).toBe('Cover a day');
+    expect(SUPPORT_SHEET_ABOUT_LABEL).toBe("See this month's days in About");
+  });
+
+  it('status unknown: the core line, nothing claimed, the full ladder labelled by amount, no About link', () => {
+    const copy = supportSheetCopy(UNCONFIGURED_STATUS, 'mobile-header');
+    expect(copy.core).toBe(CORE_LINE_FLYERS);
+    expect(copy.today).toBeNull();
+    expect(copy.about).toBeNull();
+    expect(copy.help).toBeNull();
+    expect(rows(copy)).toEqual([
+      ['$5', 'mobile-header-5', supportAmountUrl(5, 'mobile-header-5'), false],
+      ['$10', 'mobile-header-10', supportAmountUrl(10, 'mobile-header-10'), false],
+      ['$17 · one day', 'mobile-header-17', supportAmountUrl(17, 'mobile-header-17'), true],
+      ['$100 · nearly six days', 'mobile-header-100', supportAmountUrl(100, 'mobile-header-100'), false],
+    ]);
+    expect(copy.ladder.other).toEqual({ text: 'Other amount', placement: 'mobile-header-other', href: supportUrl('mobile-header-other') });
+    // Nothing for "loading": a null status reads as unknown.
+    expect(supportSheetCopy(null, 'mobile-header')).toEqual(copy);
+  });
+
+  it('today open: the line of truth, and the $17 names today on the same fixed $17 link', () => {
+    const copy = supportSheetCopy(status([pay(17, at(2))]), 'mobile-header');
+    expect(copy.today).toBe('No one has covered today yet.');
+    expect(copy.about).toBe(SUPPORT_SHEET_ABOUT_LABEL);
+    expect(rows(copy)).toEqual([
+      ['$5', 'mobile-header-5', supportAmountUrl(5, 'mobile-header-5'), false],
+      ['$10', 'mobile-header-10', supportAmountUrl(10, 'mobile-header-10'), false],
+      ['Cover today · $17', 'mobile-header-17', supportAmountUrl(17, 'mobile-header-17'), true],
+      ['$100 · nearly six days', 'mobile-header-100', supportAmountUrl(100, 'mobile-header-100'), false],
+    ]);
+  });
+
+  it('today covered: the thank-you and the next day $17 covers; and still shown when the strip would stay down', () => {
+    const tomorrow = supportSheetCopy(status([pay(17, at(10), { display_name: 'Dana R.' })]), 'mobile-header');
+    expect(tomorrow.today).toBe('Today is covered by Dana R.');
+    expect(tomorrow.ladder.amounts.find((a) => a.amount === 17).text).toBe('Cover tomorrow · $17');
+    // Today and the next 14 days covered: the strip says nothing, the sheet still offers every amount.
+    const far = status([pay(17 * (STRIP_COVERED_HORIZON_DAYS + 1), at(10))]);
+    expect(supportStripCopy(far)).toBeNull();
+    const copy = supportSheetCopy(far, 'mobile-header');
+    expect(copy.today).toBe('Today is covered by a supporter.');
+    expect(copy.ladder.amounts.map((a) => a.text)).toEqual(['$5', '$10', 'Cover Nov 25 · $17', '$100 · nearly six days']);
+  });
+
+  it('never two $17 links, never the bare placement, and every label Stripe keeps', () => {
+    for (const s of [UNCONFIGURED_STATUS, status([]), status([pay(17, at(10))]), status([pay(17 * 400, at(10))])]) {
+      for (const placement of ['mobile-header', 'mobile-more']) {
+        const copy = supportSheetCopy(s, placement);
+        const labels = [...copy.ladder.amounts.map((a) => a.placement), copy.ladder.other.placement];
+        expect(labels).not.toContain(placement);
+        expect(new Set(labels).size).toBe(labels.length);
+        expect(copy.ladder.amounts.filter((a) => a.href === supportAmountUrl(17, `${placement}-17`))).toHaveLength(1);
+        for (const label of labels) expect(label).toMatch(/^[A-Za-z0-9_-]{1,40}$/);
+      }
+    }
+  });
+
+  it('the More row\'s sheet is labelled mobile-more', () => {
+    const copy = supportSheetCopy(status([]), 'mobile-more');
+    expect([...copy.ladder.amounts.map((a) => a.placement), copy.ladder.other.placement]).toEqual([
+      'mobile-more-5',
+      'mobile-more-10',
+      'mobile-more-17',
+      'mobile-more-100',
+      'mobile-more-other',
+    ]);
+  });
+
+  it('with no fixed link at all: one "Help cover a day" on the any-amount link, labelled <placement>-other', () => {
+    const links = { 5: null, 10: null, 17: null, 100: null };
+    const copy = supportSheetCopy(status([]), 'mobile-header', { links });
+    expect(copy.ladder).toBeNull();
+    expect(copy.help).toEqual({ text: 'Help cover a day', placement: 'mobile-header-other', href: supportUrl('mobile-header-other') });
+  });
+
+  it('without the $17 link, no amount is relabelled with a day', () => {
+    const links = { ...SUPPORT_AMOUNT_LINKS, 17: null };
+    const copy = supportSheetCopy(status([]), 'mobile-header', { links });
+    expect(copy.ladder.amounts.map((a) => a.text)).toEqual(['$5', '$10', '$100 · nearly six days']);
   });
 });
 
