@@ -51,7 +51,7 @@ import { airportTz } from './time-format.js';
 import { isOnGround } from './flight-phase.js';
 import { isExpressCallsign } from './airborne-count.js';
 import { matchAircraft } from './fleet-match.js';
-import { lighterSchedulePct, lightScheduleDayOrMorningAfter, sameClockDaysBefore, scheduleComparison } from './brief-schedule.js';
+import { lighterSchedulePct, lightScheduleDayOrMorningAfter, lightScheduleHolidayName, sameClockDaysBefore, scheduleComparison } from './brief-schedule.js';
 
 export { BRIEF_HUBS };
 // The wall-clock helper lives with the schedule comparison, which needs it too.
@@ -143,9 +143,12 @@ export const BRIEF_AIRBORNE_USUAL_BAND_PCT = 10;
  * afternoon of the stop the lines were crossed at 1:20 PM PT (43%) and 1:30 PM PT (48%).
  *
  * Since v1.31.3 the line is measured against what the day's schedule leads one to expect: the usual
- * × min(1, scheduled ratio + 0.10) (src/lib/brief-schedule.js), so a light holiday schedule is not
- * a shortfall. The largest ordinary shortfall since, Tue Nov 17 2026 near 10:30 PM PT, read 31%
- * against the usual and 28% against the expected count.
+ * × the schedule's factor (src/lib/brief-schedule.js scheduleComparison), so a light holiday
+ * schedule is not a shortfall. The factor is min(1, scheduled ratio + 0.10) from a ratio of 0.90,
+ * the ratio itself at 0.70 and below, and in between the 0.10 shrinks in a straight line (v1.34.1:
+ * the flat 0.10 read "watch" on Thanksgiving afternoon 2026). The largest ordinary shortfall since
+ * v1.31.3, Tue Nov 17 2026 near 10:30 PM PT, read 31% against the usual and 28% against the
+ * expected count.
  */
 export const BRIEF_AIRBORNE_WATCH_PCT = 35;
 /** ... and at this many percent fewer it is "disrupted" and leads the brief, above any one airport's program. */
@@ -571,6 +574,9 @@ function hubsReporting(n, day) {
  * @property {boolean} [yesterday]  a hub's on-time fact read from yesterday's board
  * @property {boolean} [lighterSchedule]  air.normal says the schedule is lighter than usual today
  * @property {boolean} [inLineWithSchedule]  ... and that the count in the air is in line with it (calm)
+ * @property {boolean} [lightScheduleDay]  air.normal says United schedules far fewer flights for the
+ *   holiday: a light-schedule date or the morning after one (lightScheduleDayOrMorningAfter), with
+ *   today's scheduled count read and under 40% of the usual (`today_too_thin`). Its floor is calm then.
  */
 
 /**
@@ -1120,8 +1126,9 @@ export function buildBriefFacts(sources, { nowMs }) {
       const usual = Math.abs(pct) <= BRIEF_AIRBORNE_USUAL_BAND_PCT;
       const comparison = usual ? 'about the usual number' : `${Math.abs(pct)}% ${pct < 0 ? 'fewer' : 'more'} than usual`;
       // The day's schedule (src/lib/brief-schedule.js), only when the count is well below the usual.
-      // The usual is scaled by min(1, scheduled ratio + 0.10): only a schedule lighter than the
-      // ordinary spread moves it, a heavier one never does, and an unread or untrusted one is 1.
+      // The usual is scaled by the schedule's factor, min(1, ratio + 0.10 tapered to nothing between a
+      // ratio of 0.90 and 0.70): only a schedule lighter than the ordinary spread moves it, a heavier
+      // one never does, and an unread or untrusted one is 1.
       const schedule = scheduleReadNeeded(airborne, median) ? scheduleComparison(sources?.airSchedule) : null;
       const factor = schedule?.status === 'ok' ? schedule.factor : 1;
       const expected = Math.round(median * factor);
@@ -1143,6 +1150,16 @@ export function buildBriefFacts(sources, { nowMs }) {
       // a tone. Every other lighter schedule gets the neutral sentence, at any tone.
       const inLine = lighter !== null && -pct - lighter <= BRIEF_AIRBORNE_USUAL_BAND_PCT && shortfall === 'calm';
       const scheduleSentence = lighter === null ? '' : ` ${inLine ? 'That is in line with a lighter schedule today' : 'The schedule is lighter today too'}: about ${lighter}% fewer departures were scheduled from United's hubs over the past ${numberWord(hours)} hours than usual.`;
+      // On the holiday fallback the fact says which day it is, so the count is not read as a halt (Nov
+      // 26 2026: "67% fewer than usual" alone was published as "Far fewer United flights are in the
+      // air than usual right now."). The day by name, never "today" or "this morning": the label rolls
+      // over on Central time, and the sentence must be true in every US time zone. Only when the light
+      // schedule was measured (today's scheduled count under 40% of the usual, `today_too_thin`): after
+      // a failed read, or overnight when the count is too small to compare, the tone is capped as
+      // before and the fact claims nothing about the day. The afternoon of New Year's Day is a busy one.
+      const measuredLight = schedule?.status === 'unavailable' && schedule.reason === 'today_too_thin';
+      const holidayName = holiday && measuredLight ? lightScheduleHolidayName(nowMs) : null;
+      const holidaySentence = holidayName ? ` United schedules far fewer flights than usual for ${holidayName}.` : '';
       if (schedule) {
         const rawRatio = schedule.today !== null && schedule.usual ? Math.round((schedule.today / schedule.usual) * 1000) / 1000 : null;
         airScheduleAudit = {
@@ -1155,10 +1172,12 @@ export function buildBriefFacts(sources, { nowMs }) {
       facts.push({
         id: 'air.normal',
         kind: 'airborne',
-        statement: `The ${airborne} United flights in the air are ${comparison} for this time of day: over the past ${days} days, the median at this hour was ${median}.${scheduleSentence}`,
+        statement: `The ${airborne} United flights in the air are ${comparison} for this time of day: over the past ${days} days, the median at this hour was ${median}.${scheduleSentence}${holidaySentence}`,
         values: uniq([
           String(median), String(days), numberWord(days), usual ? null : `${Math.abs(pct)}%`, String(airborne),
           ...(lighter === null ? [] : [`${lighter}%`, String(hours), numberWord(hours), 'lighter schedule']),
+          // The day's names, and the schedule as the reason, which the sentence states.
+          ...(holidayName ? [holidayName, holidayName.replace(/ (?:Day|Eve)$/, ''), 'lighter schedule'] : []),
         ]),
         at: iso(atMs),
         link: { tab: 'live' },
@@ -1169,10 +1188,11 @@ export function buildBriefFacts(sources, { nowMs }) {
         // While the shortfall sets the tone the brief quotes its figure first, so the key moves every
         // ten points and a brief saying "73% fewer" is rewritten before the count is far from it.
         // The lighter-schedule sentence appearing, going or changing wording is a change too: "in
-        // line" says why it is calm.
-        material: `airnorm:${usual ? 'usual' : pct < 0 ? 'below' : 'above'}${inLine ? ':inline' : lighter === null ? '' : ':lighter'}${shortfall === 'calm' ? '' : `:${shortfall}:${Math.floor(Math.abs(pct) / 10) * 10}`}`,
+        // line" says why it is calm. So is the holiday sentence.
+        material: `airnorm:${usual ? 'usual' : pct < 0 ? 'below' : 'above'}${inLine ? ':inline' : lighter === null ? '' : ':lighter'}${holidayName ? ':holiday' : ''}${shortfall === 'calm' ? '' : `:${shortfall}:${Math.floor(Math.abs(pct) / 10) * 10}`}`,
         ...(lighter === null ? {} : { lighterSchedule: true }),
         ...(inLine ? { inLineWithSchedule: true } : {}),
+        ...(holidayName ? { lightScheduleDay: true } : {}),
       });
     }
   }

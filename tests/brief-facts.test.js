@@ -6,12 +6,15 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import {
-  BRIEF_AIRBORNE_DISRUPTED_PCT, BRIEF_AIRBORNE_MIN_USUAL, BRIEF_AIRBORNE_NOTABLE_PCT, BRIEF_AIRBORNE_WATCH_PCT, scheduleReadNeeded,
+  BRIEF_AIRBORNE_DISRUPTED_PCT, BRIEF_AIRBORNE_MIN_USUAL, BRIEF_AIRBORNE_NOTABLE_PCT, BRIEF_AIRBORNE_USUAL_BAND_PCT, BRIEF_AIRBORNE_WATCH_PCT, scheduleReadNeeded,
   BRIEF_HUBS, airborneNormal, airborneShortfallTone, airportDayWord, buildBriefFacts, isAirborneShortfallFact, sameClockDaysBefore, computeTone, countAirborneAndStarlink, impairedHubs,
   faaCausePhrase, formatAirportClock, isNonHubProgramFact, isWholeAirportClosure, materialKey, maxTone,
   parseIsoMs, planDateMs, publicFact, resolvePlanHhmm, resolveZuluHhmm, travelerNoteAllowed,
 } from '../src/lib/brief-facts.js';
 import { BRIEF_SYSTEM_PROMPT, buildBriefUserMessage } from '../src/lib/brief-prompt.js';
+import { lighterSchedulePct, scheduleComparison } from '../src/lib/brief-schedule.js';
+import { extractClaims } from '../src/lib/brief-claims.js';
+import { THANKSGIVING_2026_ROWS, rowSources } from './fixtures/thanksgiving-2026-rows.js';
 import { buildFaaIndex } from '../src/lib/faa-context.js';
 import { networkStatus, withoutRoutineClosures } from '../src/lib/ops-health.js';
 
@@ -870,6 +873,8 @@ describe('Nov 13 2026: far fewer flights in the air than usual sets the tone', (
     expect(BRIEF_SYSTEM_PROMPT).toMatch(/far fewer United flights are in the air than usual \(id "air\.normal", 35% or more fewer\), that is the lead/);
     expect(BRIEF_SYSTEM_PROMPT).toMatch(/give no reason for the shortfall other than a lighter schedule the fact itself states/);
     expect(BRIEF_SYSTEM_PROMPT).toMatch(/in line with a lighter schedule today, it is not a problem and never the lead or the headline/);
+    // Nov 26 2026: on Thanksgiving the model wrote "Far fewer…" on a count the holiday explained.
+    expect(BRIEF_SYSTEM_PROMPT).toContain('Write "Far fewer" only when that count is itself the day\'s alarm; a count the fact explains by a lighter schedule or a holiday is not the headline.');
   });
 });
 
@@ -912,17 +917,18 @@ describe('Nov 18 2026: a lighter schedule is not a shortfall', () => {
     expect(computeTone(out.facts)).toBe('calm');
     expect(isAirborneShortfallFact(f)).toBe(false);
     // The audit the cron stores in ops_briefs.collection.
+    // A ratio under 0.70 takes none of the 10-point band (v1.34.1): the factor is the ratio.
     expect(out.collection.airSchedule).toEqual({
-      status: 'ok', windowMin: 240, today: 490, usual: 705, days: 7, ratio: 0.695, factor: 0.795,
-      airborne: 405, usualAirborne: 641, expectedAirborne: 510, vsExpectedPct: -21,
+      status: 'ok', windowMin: 240, today: 490, usual: 705, days: 7, ratio: 0.695, factor: 0.695,
+      airborne: 405, usualAirborne: 641, expectedAirborne: 445, vsExpectedPct: -9,
     });
     // Without the schedule (the same count before v1.31.3) it read "watch".
     expect(normal(build(fixture('calm-afternoon'), { air: { airborne: 405, starlink: null } })).toneFloor).toBe('watch');
   });
 
-  it('a day 30% lighter with flights tracking the schedule reads about 12% short', () => {
+  it('a day 30% lighter with flights tracking the schedule reads as the schedule (v1.34.1: was 12% short)', () => {
     const out = air(490, 700, { today: 490, prior: week(700) });
-    expect(out.collection.airSchedule).toMatchObject({ ratio: 0.7, factor: 0.8, expectedAirborne: 560, vsExpectedPct: -12 });
+    expect(out.collection.airSchedule).toMatchObject({ ratio: 0.7, factor: 0.7, expectedAirborne: 490, vsExpectedPct: 0 });
     expect(normal(out)).toMatchObject({ toneFloor: 'calm', material: 'airnorm:below:inline', inLineWithSchedule: true });
     expect(normal(out).statement).toMatch(/30% fewer than usual for this time of day.*in line with a lighter schedule today: about 30% fewer departures/);
   });
@@ -930,7 +936,7 @@ describe('Nov 18 2026: a lighter schedule is not a shortfall', () => {
   it('"in line with" only when the schedule accounts for the shortfall, within 10 points', () => {
     const IN_LINE = 'That is in line with a lighter schedule today';
     const NEUTRAL = 'The schedule is lighter today too: about';
-    // 34% fewer flying on a schedule 12% lighter: calm (33% short of expected), but not "in line".
+    // 34% fewer flying on a schedule 12% lighter: calm (32% short of expected), but not "in line".
     const notInLine = normal(air(462, 700, { today: 616, prior: week(700) }));
     expect(notInLine).toMatchObject({ toneFloor: 'calm', lighterSchedule: true, material: 'airnorm:below:lighter' });
     expect(notInLine.inLineWithSchedule).toBeUndefined();
@@ -941,12 +947,27 @@ describe('Nov 18 2026: a lighter schedule is not a shortfall', () => {
     const past = normal(air(413, 700, { today: 490, prior: week(700) }));
     expect(past).toMatchObject({ toneFloor: 'calm', material: 'airnorm:below:lighter' });
     expect(past.statement).toContain(NEUTRAL);
-    // Never on a fact that sets a tone: 65% fewer on a schedule 55% lighter is within 10 points but
-    // 36% short of the expected count, a watch, so the sentence is the neutral one.
+    // Never on a fact that sets a tone. Under the flat band, 65% fewer on a schedule 55% lighter was
+    // within 10 points yet 36% short of the expected count, a watch. Under the taper (v1.34.1) the
+    // expected count is the schedule's own below 0.70, so the same count is 22% short, calm and in
+    // line, and no count within 10 points of the schedule reaches the watch line at all (the sweep);
+    // the calm condition on "in line" stays as a guard.
     const deep = normal(air(245, 700, { today: 315, prior: week(700) }));
-    expect(deep).toMatchObject({ toneFloor: 'watch', lighterSchedule: true });
-    expect(deep.inLineWithSchedule).toBeUndefined();
-    expect(deep.statement).not.toContain(IN_LINE);
+    expect(deep).toMatchObject({ toneFloor: 'calm', lighterSchedule: true, inLineWithSchedule: true });
+    const reachable = [];
+    for (const usualAir of [651, 700]) {
+      for (let today = 280; today <= 700; today++) {
+        const c = scheduleComparison({ today, prior: week(700) });
+        const lighter = lighterSchedulePct(c);
+        if (lighter === null) continue;
+        for (let airborne = 100; airborne <= usualAir; airborne++) {
+          const pct = Math.round(((airborne - usualAir) / usualAir) * 100);
+          if (-pct - lighter > BRIEF_AIRBORNE_USUAL_BAND_PCT) continue;
+          if (airborneShortfallTone(airborne, Math.round(usualAir * c.factor)) !== 'calm') reachable.push([usualAir, today, airborne]);
+        }
+      }
+    }
+    expect(reachable).toEqual([]);
   });
 
   it('a halt on a light-schedule day still reads disrupted, and does not call the schedule the reason', () => {
@@ -955,7 +976,7 @@ describe('Nov 18 2026: a lighter schedule is not a shortfall', () => {
     expect(f).toMatchObject({ toneFloor: 'disrupted', severity: 110, material: 'airnorm:below:lighter:disrupted:70' });
     expect(f.statement).toMatch(/73% fewer than usual.*The schedule is lighter today too: about 32% fewer departures were scheduled/);
     expect(f.statement).not.toMatch(/in line with/);
-    expect(out.collection.airSchedule).toMatchObject({ status: 'ok', factor: 0.784, expectedAirborne: 510, vsExpectedPct: -66 });
+    expect(out.collection.airSchedule).toMatchObject({ status: 'ok', factor: 0.684, expectedAirborne: 445, vsExpectedPct: -61 });
     expect(computeTone(out.facts)).toBe('disrupted');
   });
 
@@ -998,8 +1019,16 @@ describe('Nov 18 2026: a lighter schedule is not a shortfall', () => {
       const failed = air(404, 651, { today: null, prior: week(null), error: 'timeout' }, THANKSGIVING); // 38% fewer
       expect(normal(failed)).toMatchObject({ toneFloor: 'calm', severity: 20, material: 'airnorm:below' });
       expect(failed.collection.airSchedule).toMatchObject({ status: 'unavailable', reason: 'timeout', holiday: 'Thanksgiving Day', holidayCapped: true });
+      // The holiday sentence is a claim about the day's schedule, so it needs the schedule measured
+      // (today_too_thin). A failed read caps the tone and claims nothing: on the afternoon of New
+      // Year's Day, a busy one, "United schedules far fewer flights" beside a real shortfall would be false.
+      expect(normal(failed).lightScheduleDay).toBeUndefined();
+      expect(normal(failed).statement).not.toMatch(/schedules far fewer/);
       const overnight = air(80, 160, { today: 50, prior: week(120) }, '2026-11-26T09:00:00Z'); // 50% fewer, 3 AM CT
       expect(normal(overnight).toneFloor).toBe('calm');
+      // Overnight the count is too small to compare, so nothing was measured there either.
+      expect(normal(overnight).lightScheduleDay).toBeUndefined();
+      expect(normal(overnight).statement).not.toMatch(/schedules far fewer/);
       expect(overnight.collection.airSchedule).toMatchObject({ reason: 'usual_too_small', holidayCapped: true });
       // The holiday evening's light red-eyes, after Central midnight: still covered until 6 AM Central.
       const friday = air(80, 160, { today: 50, prior: week(120) }, '2026-11-27T11:30:00Z'); // 3:30 AM PT Fri
@@ -1025,5 +1054,119 @@ describe('Nov 18 2026: a lighter schedule is not a shortfall', () => {
       const light = air(404, 651, { today: 480, prior: week(700) }, THANKSGIVING);
       expect(normal(light)).toMatchObject({ toneFloor: 'calm', lighterSchedule: true, inLineWithSchedule: true });
     });
+  });
+});
+
+// Nov 26 2026, Thanksgiving: a flat 10-point band on a schedule half the usual raised the expected
+// count by about 19% and read "watch" from 3:10 to 4:30 PM PT. The band now tapers to nothing at a
+// ratio of 0.70 (src/lib/brief-schedule.js). The backtest only shows that it leaves the Nov 13 stop
+// alone (no sample of Nov 13 or 14 that was 25% or more short had a ratio under 0.90); that a halt
+// on a light day still trips is shown here, on synthetic counts.
+describe('Nov 27 2026: the taper does not blunt a halt on a light day', () => {
+  const stop = fixture('nationwide-stop-2026-11-13');
+  const week = (n) => Array.from({ length: 7 }, () => n);
+  const THANKSGIVING_AFTERNOON = '2026-11-26T22:00:00Z'; // 2 PM PT
+  const normalAt = (airborne, airSchedule) => {
+    const out = buildBriefFacts({ ...stop.sources, air: { airborne, starlink: null }, airNormal: { median: 680, days: 7 }, airSchedule }, { nowMs: Date.parse(THANKSGIVING_AFTERNOON) });
+    return { fact: byId(out.facts)['air.normal'], audit: out.collection.airSchedule, tone: computeTone(out.facts) };
+  };
+  // A readable schedule 45% light (363 of 660, ratio 0.55): the factor is the ratio, 374 expected.
+  const LIGHT = { today: 363, prior: week(660) };
+
+  it('150 in the air against 680 usual on that schedule is disrupted, and leads', () => {
+    const { fact, audit, tone } = normalAt(150, LIGHT);
+    expect(audit).toMatchObject({ status: 'ok', ratio: 0.55, factor: 0.55, expectedAirborne: 374, vsExpectedPct: -60 });
+    expect(audit.holiday).toBeUndefined();
+    expect(fact).toMatchObject({ toneFloor: 'disrupted', severity: 110, lighterSchedule: true });
+    expect(fact.lightScheduleDay).toBeUndefined();
+    expect(isAirborneShortfallFact(fact)).toBe(true);
+    expect(tone).toBe('disrupted');
+  });
+
+  it('230 in the air on the same schedule is a watch', () => {
+    const { fact, audit } = normalAt(230, LIGHT);
+    expect(audit).toMatchObject({ factor: 0.55, expectedAirborne: 374, vsExpectedPct: -39 });
+    expect(fact).toMatchObject({ toneFloor: 'watch', severity: 50, lighterSchedule: true });
+  });
+
+  it('flights tracking that schedule are calm', () => {
+    const { fact, audit } = normalAt(340, LIGHT);
+    expect(audit).toMatchObject({ factor: 0.55, vsExpectedPct: -9 });
+    expect(fact).toMatchObject({ toneFloor: 'calm', inLineWithSchedule: true });
+  });
+});
+
+// Nov 26 2026, Thanksgiving, replayed from production's stored rows (tests/fixtures/thanksgiving-2026-rows.js)
+// through the real fact builder: the taper (src/lib/brief-schedule.js) and the holiday sentence.
+describe('Nov 27 2026: Thanksgiving replayed', () => {
+  const HOLIDAY_SENTENCE = ' United schedules far fewer flights than usual for Thanksgiving Day.';
+  const replay = THANKSGIVING_2026_ROWS.map((row) => {
+    const out = buildBriefFacts(rowSources(row), { nowMs: Date.parse(row[1]) });
+    return { id: row[0], fact: byId(out.facts)['air.normal'], audit: out.collection.airSchedule };
+  });
+
+  it('no row reaches watch, and no row with a usable schedule is more than 30% short of the expected count', () => {
+    expect(replay.filter((r) => r.fact.toneFloor !== 'calm').map((r) => r.id)).toEqual([]);
+    const usable = replay.filter((r) => r.audit.status === 'ok');
+    expect(usable.map((r) => r.id)).toEqual(THANKSGIVING_2026_ROWS.filter(([id]) => id <= 879).map(([id]) => id));
+    expect(usable.filter((r) => r.audit.vsExpectedPct < -30).map((r) => [r.id, r.audit.vsExpectedPct])).toEqual([]);
+  });
+
+  it('row 871, 3:10 PM PT: 23% short of a schedule half the usual (production read 35%, "watch")', () => {
+    const { fact, audit } = replay.find((r) => r.id === 871);
+    expect(audit).toMatchObject({ status: 'ok', ratio: 0.536, factor: 0.536, expectedAirborne: 364, vsExpectedPct: -23 });
+    expect(fact).toMatchObject({ toneFloor: 'calm', lighterSchedule: true, material: 'airnorm:below:lighter' });
+    expect(fact.lightScheduleDay).toBeUndefined();
+    expect(fact.statement).not.toContain(HOLIDAY_SENTENCE);
+  });
+
+  it('from row 880 the schedule is too thin to use: the fact says it is the holiday, at a calm floor', () => {
+    const thin = replay.filter((r) => r.id >= 880);
+    expect(thin).toHaveLength(12);
+    for (const { id, fact, audit } of thin) {
+      expect(audit, String(id)).toMatchObject({ status: 'unavailable', reason: 'today_too_thin' });
+      expect(fact, String(id)).toMatchObject({ toneFloor: 'calm', lightScheduleDay: true, material: 'airnorm:below:holiday' });
+      expect(fact.statement.endsWith(HOLIDAY_SENTENCE), String(id)).toBe(true);
+      expect(fact.values, String(id)).toEqual(expect.arrayContaining(['Thanksgiving Day', 'Thanksgiving']));
+      expect(isAirborneShortfallFact(fact)).toBe(false);
+    }
+    // The audit keeps its fields: row 886 capped from 67% short, row 891 past Central midnight and not capped.
+    expect(replay.find((r) => r.id === 886).audit).toMatchObject({ holiday: 'Thanksgiving Day', holidayCapped: true, vsExpectedPct: -67 });
+    expect(replay.find((r) => r.id === 891).audit).toMatchObject({ holiday: 'the morning after Thanksgiving Day', holidayCapped: false, vsExpectedPct: -34 });
+    expect(replay.find((r) => r.id === 886).fact.statement).toBe(`The 160 United flights in the air are 67% fewer than usual for this time of day: over the past 7 days, the median at this hour was 491.${HOLIDAY_SENTENCE}`);
+  });
+
+  it('the sentence names the day itself for each of the five dates, and the morning after each', () => {
+    const thin = (nowIso) => byId(buildBriefFacts({ air: { airborne: 160, starlink: null }, airNormal: { median: 491, days: 7 }, airSchedule: { today: 100, prior: Array(7).fill(700) } }, { nowMs: Date.parse(nowIso) }).facts)['air.normal'];
+    const cases = [
+      ['2026-11-26T20:00:00Z', 'Thanksgiving Day', 'Thanksgiving'],
+      ['2026-11-27T09:00:00Z', 'Thanksgiving Day', 'Thanksgiving'], // 3 AM CT Friday: the morning after
+      ['2026-12-24T20:00:00Z', 'Christmas Eve', 'Christmas'],
+      ['2026-12-25T20:00:00Z', 'Christmas Day', 'Christmas'],
+      ['2026-12-26T09:00:00Z', 'Christmas Day', 'Christmas'],
+      ['2026-12-31T20:00:00Z', "New Year's Eve", "New Year's"],
+      ['2027-01-01T20:00:00Z', "New Year's Day", "New Year's"],
+      ['2027-01-02T09:00:00Z', "New Year's Day", "New Year's"],
+    ];
+    for (const [nowIso, name, short] of cases) {
+      const f = thin(nowIso);
+      const sentence = ` United schedules far fewer flights than usual for ${name}.`;
+      expect(f.statement.endsWith(sentence), nowIso).toBe(true);
+      expect(f.values, nowIso).toEqual(expect.arrayContaining([name, short]));
+      expect(f).toMatchObject({ lightScheduleDay: true, toneFloor: 'calm' });
+      // No claim the verifier would have to ground: no airport, number or time in it.
+      expect(extractClaims(sentence), nowIso).toEqual([]);
+    }
+    // Any other day, the same thin schedule: no flag, no sentence, the tone as before.
+    const ordinary = thin('2026-11-20T20:00:00Z');
+    expect(ordinary.lightScheduleDay).toBeUndefined();
+    expect(ordinary.statement).not.toMatch(/schedules far fewer/);
+    expect(ordinary.toneFloor).toBe('disrupted');
+  });
+
+  it('on the holiday a count near the usual reads nothing and says nothing', () => {
+    const f = byId(buildBriefFacts({ air: { airborne: 600, starlink: null }, airNormal: { median: 660, days: 7 }, airSchedule: { today: 100, prior: Array(7).fill(700) } }, { nowMs: Date.parse('2026-11-26T20:00:00Z') }).facts)['air.normal'];
+    expect(f.lightScheduleDay).toBeUndefined();
+    expect(f.statement).not.toMatch(/Thanksgiving/);
   });
 });

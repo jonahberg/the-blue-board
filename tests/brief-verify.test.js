@@ -9,6 +9,8 @@ import { allowanceFromValues, claimFailure, extractClaims } from '../src/lib/bri
 import { readFileSync, readdirSync } from 'node:fs';
 import { buildBriefFacts } from '../src/lib/brief-facts.js';
 import { briefFromSavedResponse, checkSentence, citedFactIds, finalizeSentence, fixDayWordOrder, nonHubLeadReason, tomorrowLeadReason, trimOnTimeDefinition, validateBriefShape, verifyBrief, withoutHubStatus } from '../src/lib/brief-verify.js';
+import { templateHeadline } from '../src/lib/brief-template.js';
+import { scenario } from './fixtures/watch-breadth-scenarios.js';
 
 const fact = (id, values, extra = {}) => ({
   id, kind: 'otp', statement: `${id} statement`, values, at: null, link: { tab: 'live' }, severity: 5, toneFloor: 'calm', material: id, ...extra,
@@ -789,9 +791,9 @@ describe('verifyBrief: a lighter schedule', () => {
   });
 
   it('at watch with a lighter schedule, "Far fewer" overstates it: the headline is replaced', () => {
-    // 48% fewer than usual on a day 30% lighter: 35% short of the expected count, a watch.
+    // 55% fewer than usual on a day 30% lighter: 36% short of the expected count, a watch.
     const stop = JSON.parse(readFileSync(new URL('./fixtures/brief/nationwide-stop-2026-11-13.json', import.meta.url), 'utf8'));
-    const watchFacts = buildBriefFacts({ ...stop.sources, air: { airborne: 338, starlink: null }, airSchedule: { today: 490, prior: Array(7).fill(700) } }, { nowMs: Date.parse(stop.nowIso) }).facts;
+    const watchFacts = buildBriefFacts({ ...stop.sources, air: { airborne: 290, starlink: null }, airSchedule: { today: 490, prior: Array(7).fill(700) } }, { nowMs: Date.parse(stop.nowIso) }).facts;
     const f = watchFacts.find((x) => x.id === 'air.normal');
     expect(f).toMatchObject({ toneFloor: 'watch', lighterSchedule: true });
     const headline = 'Far fewer United flights are in the air than usual right now.';
@@ -813,5 +815,148 @@ describe('verifyBrief: a lighter schedule', () => {
     const plain = buildBriefFacts(JSON.parse(readFileSync(new URL('./fixtures/brief/calm-afternoon.json', import.meta.url), 'utf8')).sources, { nowMs: Date.parse(fx.nowIso) }).facts;
     const claim = item('630 United flights are in the air; fewer flights were scheduled today.', ['air.normal']);
     expect(verifyBrief(brief([claim]), plain).report.dropped).toEqual([expect.objectContaining({ reasons: ['cause_not_in_facts:fewer flights were scheduled'] })]);
+  });
+});
+
+// Nov 26 2026, Thanksgiving (tests/fixtures/thanksgiving-2026-rows.js): from 5 PM PT the schedule was
+// too thin to use, the holiday fallback held the tone at calm, and the model still headlined "Far
+// fewer United flights are in the air than usual right now." five times.
+describe('verifyBrief: Thanksgiving', () => {
+  // Row 886 (7:40 PM PT): 160 in the air against 491 usual, 120 scheduled against 706.
+  const row886 = buildBriefFacts({ air: { airborne: 160, starlink: 18 }, airNormal: { median: 491, days: 7 }, airSchedule: { today: 120, prior: Array(7).fill(706) } }, { nowMs: Date.parse('2026-11-27T03:40:04Z') }).facts;
+  const normal886 = row886.find((f) => f.id === 'air.normal');
+
+  it('a sentence that names the holiday, or the light schedule the fact states, is grounded by the fact', () => {
+    // Without 'lighter schedule' in the values the last two would be dropped (cause_not_in_facts).
+    expect(normal886).toMatchObject({ lightScheduleDay: true, toneFloor: 'calm' });
+    for (const text of [
+      'Only 160 United flights are in the air, 67% fewer than usual, on a light Thanksgiving Day schedule.',
+      'Fewer flights are scheduled than usual for Thanksgiving, so 160 United flights are in the air.',
+      "The 160 United flights in the air reflect Thanksgiving's lighter schedule.",
+    ]) {
+      const out = verifyBrief(brief([item(text, ['air.normal'])]), row886);
+      expect(out.report.dropped, text).toEqual([]);
+    }
+    // The fact's own statement passes as an item (the template and the shortfall lead print it verbatim).
+    expect(verifyBrief(brief([item(normal886.statement, ['air.normal'])]), row886).report.dropped).toEqual([]);
+  });
+});
+
+describe('verifyBrief: "Far fewer" only beside a disrupted shortfall; no "fewer flights" headline on the holiday', () => {
+  const fixtureOf = (name) => JSON.parse(readFileSync(new URL(`./fixtures/brief/${name}.json`, import.meta.url), 'utf8'));
+  const factsOf = (fx) => buildBriefFacts(fx.sources, { nowMs: Date.parse(fx.nowIso) }).facts;
+  const statementItem = (facts, id) => item(facts.find((f) => f.id === id).statement, [id]);
+  const FAR = 'Far fewer United flights are in the air than usual right now.';
+  const FEWER = 'Fewer United flights than usual are in the air right now.';
+  /**
+   * The final brief, and that it re-verifies as published (every existing check passes on it). The
+   * re-verify reads the headline against the items alone, so the items cite what it names.
+   */
+  const publish = (candidate, facts) => {
+    const out = verifyBrief(candidate, facts);
+    const b = out.brief;
+    const again = verifyBrief({ headline: b.headline, tone: b.tone, items: b.items, traveler_note: b.traveler_note }, facts);
+    expect(again.report.headline.status, b.headline).toBe('kept');
+    expect(out.report.headline.fallback, b.headline).toBeUndefined();
+    return out;
+  };
+
+  const capped = fixtureOf('thanksgiving-2026-evening-capped');
+  const cappedFacts = factsOf(capped);
+  // As the stored row 886's model items: the count, the weather at both hubs, the on-time summary.
+  const cappedItems = [statementItem(cappedFacts, 'air.normal'), item('Very low clouds and rain are slowing Washington Dulles, and low visibility and rain are slowing Newark.', ['wx.IAD', 'wx.EWR']), statementItem(cappedFacts, 'otp.floor')];
+
+  it('(a) row 886: calm, the holiday fact, "Far fewer…" is replaced by a calm headline about the hubs', () => {
+    const out = publish(brief(cappedItems, { tone: 'disrupted', headline: FAR }), cappedFacts);
+    expect(out.report.headline).toEqual({ status: 'replaced', reasons: ['headline:fewer_on_light_schedule_day'], original: FAR });
+    expect(out.brief.tone).toBe('calm');
+    expect(out.brief.headline).toBe('Weather is slowing Washington Dulles and Newark; the other hubs are normal.');
+    expect(out.report.dropped).toEqual([]);
+  });
+
+  it('(a) the same with nothing at the hubs, where the in-the-air fact is the most severe: the calm line', () => {
+    const { sources } = scenario({ nowIso: capped.nowIso });
+    const facts = factsOf({ nowIso: capped.nowIso, sources: { ...sources, air: { airborne: 160, starlink: 18 }, airNormal: { median: 491, days: 7 }, airSchedule: capped.sources.airSchedule } });
+    expect([...facts].sort((x, y) => y.severity - x.severity)[0]).toMatchObject({ id: 'air.normal', severity: 20, lightScheduleDay: true });
+    // The template headline for these facts is not itself a "fewer flights" line.
+    expect(templateHeadline(facts, 'calm').headline).toBe('United is running smoothly right now.');
+    const out = publish(brief([statementItem(facts, 'otp.floor'), statementItem(facts, 'air.normal')], { headline: FAR }), facts);
+    expect(out.report.headline.status).toBe('replaced');
+    expect(out.brief.headline).toBe('United is running smoothly right now.');
+    expect(out.brief.tone).toBe('calm');
+  });
+
+  it('(b) row 886 with "Fewer United flights than usual…": replaced too', () => {
+    const out = publish(brief(cappedItems, { headline: FEWER }), cappedFacts);
+    expect(out.report.headline).toEqual({ status: 'replaced', reasons: ['headline:fewer_on_light_schedule_day'], original: FEWER });
+    expect(out.brief.headline).not.toMatch(/fewer/i);
+    // A headline about the holiday that is not about fewer flights stands.
+    const kept = verifyBrief(brief(cappedItems, { headline: 'Weather is slowing Washington Dulles on a light Thanksgiving evening.' }), cappedFacts);
+    expect(kept.report.headline.status).toBe('kept');
+  });
+
+  it('(c) row 887: watch from one impaired hub and the index, "Far fewer…" is replaced by the watch headline', () => {
+    const facts = factsOf(fixtureOf('thanksgiving-2026-evening-one-hub-watch'));
+    const items = [statementItem(facts, 'otp.IAD'), statementItem(facts, 'net.index'), statementItem(facts, 'air.normal')];
+    const out = publish(brief(items, { tone: 'disrupted', headline: FAR }), facts);
+    expect(out.report.headline.reasons).toEqual(['headline:fewer_on_light_schedule_day']);
+    expect(out.brief.tone).toBe('watch');
+    expect(out.brief.headline).toBe('Washington Dulles is running behind; delays are up across the network.');
+  });
+
+  it('(d) row 871 after the taper: calm on a readable lighter schedule, 59% fewer, "Far fewer…" is replaced', () => {
+    const facts = factsOf(fixtureOf('thanksgiving-2026-afternoon-lighter'));
+    expect(facts.find((f) => f.id === 'air.normal')).toMatchObject({ toneFloor: 'calm', lighterSchedule: true });
+    const out = publish(brief([statementItem(facts, 'otp.floor'), statementItem(facts, 'air.normal')], { tone: 'watch', headline: FAR }), facts);
+    expect(out.report.headline).toEqual({ status: 'replaced', reasons: ['headline:far_fewer_without_shortfall'], original: FAR });
+    expect(out.brief.headline).toBe('United is running smoothly right now.');
+    expect(out.brief.tone).toBe('calm');
+  });
+
+  it('a watch-level shortfall with no schedule read: "Far fewer…" is replaced by the watch shortfall line', () => {
+    const stop = fixtureOf('nationwide-stop-2026-11-13');
+    const facts = buildBriefFacts({ ...stop.sources, air: { airborne: 420, starlink: null } }, { nowMs: Date.parse(stop.nowIso) }).facts;
+    expect(facts.find((f) => f.id === 'air.normal').toneFloor).toBe('watch');
+    const out = verifyBrief(brief([statementItem(facts, 'air.normal'), statementItem(facts, 'faa.active.SFO.gdp')], { tone: 'watch', headline: FAR }), facts);
+    expect(out.report.headline.reasons).toEqual(['headline:far_fewer_without_shortfall']);
+    // The watch template leads with the hub's delay program; it says nothing about "far fewer".
+    expect(out.brief.headline).toBe('A ground delay program is holding flights into San Francisco.');
+    // Without the program the watch template's own line is the shortfall's, without "far".
+    const bare = factsOf(scenario({ airborne: 400 }));
+    expect(bare.find((f) => f.id === 'air.normal').toneFloor).toBe('watch');
+    const plain = verifyBrief(brief([statementItem(bare, 'air.normal')], { tone: 'watch', headline: FAR }), bare);
+    expect(plain.report.headline.reasons).toEqual(['headline:far_fewer_without_shortfall']);
+    expect(plain.brief.headline).toBe(FEWER);
+  });
+
+  it('the Haiku samples (v1.34.1 prompt): the holiday evening and the morning after never headline fewer flights; the halt leads with it', () => {
+    const sample = (name) => briefFromSavedResponse(readFileSync(new URL(`./fixtures/brief-samples/${name}.1.json`, import.meta.url), 'utf8'), factsOf(fixtureOf(name)));
+    for (const [name, tone] of [['thanksgiving-2026-evening-capped', 'calm'], ['thanksgiving-2026-evening-one-hub-watch', 'watch'], ['thanksgiving-2026-morning-after', 'calm']]) {
+      const out = sample(name);
+      expect(out.source, name).toBe('model');
+      expect(out.brief.tone, name).toBe(tone);
+      expect(out.brief.headline, name).not.toMatch(/fewer/i);
+      expect(out.brief.items.find((i) => i.fact_ids.includes('air.normal'))?.text, name).toMatch(/Thanksgiving/);
+    }
+    const halt = sample('thanksgiving-2026-halt-light-schedule');
+    expect(halt.brief).toMatchObject({ tone: 'disrupted', headline: FAR });
+    expect(halt.brief.items[0].fact_ids).toEqual(['air.normal']);
+  });
+
+  it('(e) a disrupted shortfall still leads with "Far fewer…": the Nov 13 stop, and a halt on a light day', () => {
+    for (const name of ['nationwide-stop-2026-11-13', 'thanksgiving-2026-halt-light-schedule']) {
+      const facts = factsOf(fixtureOf(name));
+      const out = verifyBrief(brief([statementItem(facts, 'air.normal'), statementItem(facts, 'otp.floor')], { tone: 'disrupted', headline: FAR }), facts);
+      expect(out.report.headline.status, name).toBe('kept');
+      expect(out.brief.headline, name).toBe(FAR);
+      expect(out.brief.tone, name).toBe('disrupted');
+      // A headline that leaves the shortfall out is still replaced by it.
+      const missed = verifyBrief(brief([statementItem(facts, 'otp.floor')], { tone: 'disrupted', headline: 'United is having a hard afternoon.' }), facts);
+      expect(missed.report.headline.reasons, name).toEqual(['headline:misses_network_shortfall']);
+      expect(missed.brief.headline, name).toBe(FAR);
+    }
+    // On the light day "Fewer…" without "far" is about the shortfall too, and stands.
+    const halt = factsOf(fixtureOf('thanksgiving-2026-halt-light-schedule'));
+    expect(verifyBrief(brief([statementItem(halt, 'air.normal')], { tone: 'disrupted', headline: FEWER }), halt).report.headline.status).toBe('kept');
   });
 });
