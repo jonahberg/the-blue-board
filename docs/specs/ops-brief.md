@@ -271,7 +271,11 @@ so "what a fact allows" and "what a sentence claims" are measured with one ruler
    and the hours in `values` and the `schedule` cause (`src/lib/brief-claims.js`), so only this fact
    can give a lighter schedule as a reason. A fact saying "in line" is never the headline
    (`headline:fewer_in_line_with_schedule`) and is the calm template's in-the-air line; at `watch` a "Far fewer" headline is replaced
-   (`headline:far_fewer_with_lighter_schedule`), since the raw figure can pass 45% there. Every read is stored in `ops_briefs.collection.airSchedule`: today's
+   (`headline:far_fewer_with_lighter_schedule`), since the raw figure can pass 45% there. Since
+   v1.34.1 a "Far fewer" headline stands only beside a `disrupted` shortfall; anywhere else it is
+   replaced (`headline:far_fewer_without_shortfall`, unless a reason above or below already names
+   the case), and on a `lightScheduleDay` fact any "fewer flights" headline is replaced, as with
+   "in line" (`headline:fewer_on_light_schedule_day`). Every read is stored in `ops_briefs.collection.airSchedule`: today's
    count, the usual, the raw ratio, the factor applied, the expected count, or `unavailable` and its
    reason. Backtest: `scripts/backtest-airborne-schedule.sql`. At
    `disrupted` the fact is first in the list, an item citing it is moved to the front (or its

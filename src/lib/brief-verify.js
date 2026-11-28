@@ -486,9 +486,15 @@ export function finalizeSentence(original, ids, factIndex, { rewrites = [], extr
 
 /** A headline about how many flights are flying: required when far fewer are in the air than usual. */
 const NETWORK_SHORTFALL_HEADLINE_RE = /\b(?:in the air|airborne|aloft|flying|fewer|grounded)\b/i;
-/** A headline saying fewer flights are flying: not allowed when the count is in line with a lighter schedule. */
+/**
+ * A headline saying fewer flights are flying: not allowed when the count is in line with a lighter
+ * schedule, nor on the holiday fallback (air.normal `lightScheduleDay`).
+ */
 const FEWER_FLYING_HEADLINE_RE = /\bfewer\b.*\b(?:flights?|in the air|airborne|aloft|flying)\b|\bgrounded\b/i;
-/** "Far fewer" is the disrupted headline: with a lighter schedule at watch, the count is not that far short. */
+/**
+ * "Far fewer" is the disrupted headline, and only that (Nov 26 2026: published five times on
+ * Thanksgiving at a calm or watch tone, with the count explained by the holiday).
+ */
 const FAR_FEWER_HEADLINE_RE = /\bfar\s+fewer\b/i;
 
 /**
@@ -622,6 +628,9 @@ export function verifyBrief(candidate, facts) {
   // At watch, a lighter schedule explains part of the shortfall: the raw figure can pass the 45% the
   // prompt names for "Far fewer" while the count against the schedule does not.
   const lighterAtWatch = factList.find((f) => f.id === 'air.normal' && f.lighterSchedule === true && f.toneFloor === 'watch');
+  // On the holiday fallback the fact says United schedules far fewer flights for the day (Nov 26
+  // 2026): the count is explained, so it is not the headline, as with "in line" above.
+  const lightScheduleDay = factList.find((f) => f.id === 'air.normal' && f.lightScheduleDay === true);
 
   if (kept.length === 0) return { ok: false, brief: null, report };
 
@@ -651,7 +660,14 @@ export function verifyBrief(candidate, facts) {
     // With far fewer flights in the air than usual, the headline is about that, not one airport.
     if (shortfall && !NETWORK_SHORTFALL_HEADLINE_RE.test(text)) reasons.push('headline:misses_network_shortfall');
     if (inLineWithSchedule && FEWER_FLYING_HEADLINE_RE.test(text)) reasons.push('headline:fewer_in_line_with_schedule');
-    if (lighterAtWatch && FAR_FEWER_HEADLINE_RE.test(text)) reasons.push('headline:far_fewer_with_lighter_schedule');
+    if (lightScheduleDay && FEWER_FLYING_HEADLINE_RE.test(text)) reasons.push('headline:fewer_on_light_schedule_day');
+    // "Far fewer" stands only beside a disrupted shortfall. One reason per headline: the rules above
+    // already name an explained count, and a lighter schedule at watch keeps its own reason, so the
+    // reasons stored before this rule (Nov 27 2026) mean what they meant.
+    const fewerRuled = reasons.some((r) => r === 'headline:fewer_in_line_with_schedule' || r === 'headline:fewer_on_light_schedule_day');
+    if (!shortfall && !fewerRuled && FAR_FEWER_HEADLINE_RE.test(text)) {
+      reasons.push(lighterAtWatch ? 'headline:far_fewer_with_lighter_schedule' : 'headline:far_fewer_without_shortfall');
+    }
     if (MARKUP_RE.test(text)) reasons.push('markup_or_url');
     return reasons;
   };
