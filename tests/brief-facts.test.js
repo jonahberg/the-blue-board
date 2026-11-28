@@ -1017,10 +1017,18 @@ describe('Nov 18 2026: a lighter schedule is not a shortfall', () => {
 
     it('a failed read, or thin overnight counts, on Thanksgiving: calm, and the audit says why', () => {
       const failed = air(404, 651, { today: null, prior: week(null), error: 'timeout' }, THANKSGIVING); // 38% fewer
-      expect(normal(failed)).toMatchObject({ toneFloor: 'calm', severity: 20, material: 'airnorm:below:holiday', lightScheduleDay: true });
+      expect(normal(failed)).toMatchObject({ toneFloor: 'calm', severity: 20, material: 'airnorm:below' });
       expect(failed.collection.airSchedule).toMatchObject({ status: 'unavailable', reason: 'timeout', holiday: 'Thanksgiving Day', holidayCapped: true });
+      // The holiday sentence is a claim about the day's schedule, so it needs the schedule measured
+      // (today_too_thin). A failed read caps the tone and claims nothing: on the afternoon of New
+      // Year's Day, a busy one, "United schedules far fewer flights" beside a real shortfall would be false.
+      expect(normal(failed).lightScheduleDay).toBeUndefined();
+      expect(normal(failed).statement).not.toMatch(/schedules far fewer/);
       const overnight = air(80, 160, { today: 50, prior: week(120) }, '2026-11-26T09:00:00Z'); // 50% fewer, 3 AM CT
       expect(normal(overnight).toneFloor).toBe('calm');
+      // Overnight the count is too small to compare, so nothing was measured there either.
+      expect(normal(overnight).lightScheduleDay).toBeUndefined();
+      expect(normal(overnight).statement).not.toMatch(/schedules far fewer/);
       expect(overnight.collection.airSchedule).toMatchObject({ reason: 'usual_too_small', holidayCapped: true });
       // The holiday evening's light red-eyes, after Central midnight: still covered until 6 AM Central.
       const friday = air(80, 160, { today: 50, prior: week(120) }, '2026-11-27T11:30:00Z'); // 3:30 AM PT Fri

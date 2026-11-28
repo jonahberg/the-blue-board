@@ -575,8 +575,8 @@ function hubsReporting(n, day) {
  * @property {boolean} [lighterSchedule]  air.normal says the schedule is lighter than usual today
  * @property {boolean} [inLineWithSchedule]  ... and that the count in the air is in line with it (calm)
  * @property {boolean} [lightScheduleDay]  air.normal says United schedules far fewer flights for the
- *   holiday: a light-schedule date or the morning after one, with the schedule read but not usable
- *   (lightScheduleDayOrMorningAfter). Its floor is calm then.
+ *   holiday: a light-schedule date or the morning after one (lightScheduleDayOrMorningAfter), with
+ *   today's scheduled count read and under 40% of the usual (`today_too_thin`). Its floor is calm then.
  */
 
 /**
@@ -1153,8 +1153,12 @@ export function buildBriefFacts(sources, { nowMs }) {
       // On the holiday fallback the fact says which day it is, so the count is not read as a halt (Nov
       // 26 2026: "67% fewer than usual" alone was published as "Far fewer United flights are in the
       // air than usual right now."). The day by name, never "today" or "this morning": the label rolls
-      // over on Central time, and the sentence must be true in every US time zone.
-      const holidayName = holiday ? lightScheduleHolidayName(nowMs) : null;
+      // over on Central time, and the sentence must be true in every US time zone. Only when the light
+      // schedule was measured (today's scheduled count under 40% of the usual, `today_too_thin`): after
+      // a failed read, or overnight when the count is too small to compare, the tone is capped as
+      // before and the fact claims nothing about the day. The afternoon of New Year's Day is a busy one.
+      const measuredLight = schedule?.status === 'unavailable' && schedule.reason === 'today_too_thin';
+      const holidayName = holiday && measuredLight ? lightScheduleHolidayName(nowMs) : null;
       const holidaySentence = holidayName ? ` United schedules far fewer flights than usual for ${holidayName}.` : '';
       if (schedule) {
         const rawRatio = schedule.today !== null && schedule.usual ? Math.round((schedule.today / schedule.usual) * 1000) / 1000 : null;
