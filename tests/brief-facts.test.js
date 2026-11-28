@@ -1052,8 +1052,8 @@ describe('Nov 18 2026: a lighter schedule is not a shortfall', () => {
 // Nov 26 2026, Thanksgiving: a flat 10-point band on a schedule half the usual raised the expected
 // count by about 19% and read "watch" from 3:10 to 4:30 PM PT. The band now tapers to nothing at a
 // ratio of 0.70 (src/lib/brief-schedule.js). The backtest only shows that it leaves the Nov 13 stop
-// alone (no sample of the stop had a ratio under 0.90); that a halt on a light day still trips is
-// shown here, on synthetic counts.
+// alone (no sample of Nov 13 or 14 that was 25% or more short had a ratio under 0.90); that a halt
+// on a light day still trips is shown here, on synthetic counts.
 describe('Nov 27 2026: the taper does not blunt a halt on a light day', () => {
   const stop = fixture('nationwide-stop-2026-11-13');
   const week = (n) => Array.from({ length: 7 }, () => n);

@@ -36,9 +36,11 @@
 --   f Nov26 schedule usable and read       60      0     0.409   11/0       0/0         39         27
 --   g Nov26 not read or not usable        228     73         -    0/0       0/0         23         23
 --   h Nov27 Fri                           234      2         -    0/0       0/0         24         24
--- On Nov 27 no sample was read with a usable schedule: the only two 25% short (00:20 and 03:35 PT,
--- 25% each) had a usual four-hour count under 150 and fell in the morning after, so they are capped.
--- In the Nov 13 and 14 groups no sample was read with a ratio under 0.90 (min ratio above), so
+-- On Nov 27 no sample was read with a usable schedule, so both rules read it the same: the only two
+-- 25% short (00:20 and 03:35 PT) had a usual four-hour count under 150 and fell in the morning after,
+-- so they are capped. Counted over every slot, capped ones included, the largest raw shortfall is
+-- 25; over the 170 slots with a usable schedule, 21 (the "25 / 21" of the first count of this run).
+-- In the Nov 13 and 14 groups no sample 25% or more short had a ratio under 0.90 (min ratio), so
 -- these rows show that the taper leaves them alone; they do NOT show that the taper still catches
 -- a halt on a light day. That is a synthetic test (tests/brief-facts.test.js, "the taper does not
 -- blunt a halt on a light day").
