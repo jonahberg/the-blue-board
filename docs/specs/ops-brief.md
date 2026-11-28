@@ -260,7 +260,10 @@ so "what a fact allows" and "what a sentence claims" are measured with one ruler
    Dec 31, Jan 1), and the morning after each until 6 AM Central (`lightScheduleDayOrMorningAfter`:
    the holiday evening's red-eyes are still flying when the four-hour count gets too small), an
    unused ratio caps the shortfall's tone at `calm` instead, rather than risk a false "Disrupted" on
-   a day the schedule is known to be light; that list is only this fallback. When the factor is
+   a day the schedule is known to be light; that list is only this fallback. Then (v1.34.1) the
+   fact says so, in words true in every US time zone (the date is Central): "United schedules far
+   fewer flights than usual for Thanksgiving Day." (`lightScheduleDay`; the day's names and the
+   `schedule` cause in `values`; `:holiday` in `material`). When the factor is
    below 1 the fact adds what the schedule shows: "That is in line with a lighter schedule today:
    about N% fewer departures were scheduled from United's hubs over the past four hours than usual."
    only when the result is calm and the percent fewer in the air is within 10 points of N

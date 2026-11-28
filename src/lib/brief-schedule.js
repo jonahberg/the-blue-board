@@ -209,3 +209,15 @@ export function lightScheduleDayOrMorningAfter(ms) {
   const earlier = lightScheduleHoliday(ms - MORNING_AFTER_UNTIL_HOUR_CT * 3_600_000);
   return earlier ? `the morning after ${earlier}` : null;
 }
+
+/**
+ * The light-schedule date itself, for that date and the morning after it (the same hours as
+ * lightScheduleDayOrMorningAfter): "Thanksgiving Day" both on Thursday and at 1 AM Central on
+ * Friday. The brief's sentence names the day this way because the label rolls over on Central time,
+ * so a sentence true in every US time zone cannot say "today" or "this morning".
+ * @param {number} ms
+ * @returns {string|null}
+ */
+export function lightScheduleHolidayName(ms) {
+  return lightScheduleHoliday(ms) ?? lightScheduleHoliday(ms - MORNING_AFTER_UNTIL_HOUR_CT * 3_600_000);
+}

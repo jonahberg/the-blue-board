@@ -815,3 +815,27 @@ describe('verifyBrief: a lighter schedule', () => {
     expect(verifyBrief(brief([claim]), plain).report.dropped).toEqual([expect.objectContaining({ reasons: ['cause_not_in_facts:fewer flights were scheduled'] })]);
   });
 });
+
+// Nov 26 2026, Thanksgiving (tests/fixtures/thanksgiving-2026-rows.js): from 5 PM PT the schedule was
+// too thin to use, the holiday fallback held the tone at calm, and the model still headlined "Far
+// fewer United flights are in the air than usual right now." five times.
+describe('verifyBrief: Thanksgiving', () => {
+  // Row 886 (7:40 PM PT): 160 in the air against 491 usual, 120 scheduled against 706.
+  const row886 = buildBriefFacts({ air: { airborne: 160, starlink: 18 }, airNormal: { median: 491, days: 7 }, airSchedule: { today: 120, prior: Array(7).fill(706) } }, { nowMs: Date.parse('2026-11-27T03:40:04Z') }).facts;
+  const normal886 = row886.find((f) => f.id === 'air.normal');
+
+  it('a sentence that names the holiday, or the light schedule the fact states, is grounded by the fact', () => {
+    // Without 'lighter schedule' in the values the last two would be dropped (cause_not_in_facts).
+    expect(normal886).toMatchObject({ lightScheduleDay: true, toneFloor: 'calm' });
+    for (const text of [
+      'Only 160 United flights are in the air, 67% fewer than usual, on a light Thanksgiving Day schedule.',
+      'Fewer flights are scheduled than usual for Thanksgiving, so 160 United flights are in the air.',
+      "The 160 United flights in the air reflect Thanksgiving's lighter schedule.",
+    ]) {
+      const out = verifyBrief(brief([item(text, ['air.normal'])]), row886);
+      expect(out.report.dropped, text).toEqual([]);
+    }
+    // The fact's own statement passes as an item (the template and the shortfall lead print it verbatim).
+    expect(verifyBrief(brief([item(normal886.statement, ['air.normal'])]), row886).report.dropped).toEqual([]);
+  });
+});

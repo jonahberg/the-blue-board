@@ -51,7 +51,7 @@ import { airportTz } from './time-format.js';
 import { isOnGround } from './flight-phase.js';
 import { isExpressCallsign } from './airborne-count.js';
 import { matchAircraft } from './fleet-match.js';
-import { lighterSchedulePct, lightScheduleDayOrMorningAfter, sameClockDaysBefore, scheduleComparison } from './brief-schedule.js';
+import { lighterSchedulePct, lightScheduleDayOrMorningAfter, lightScheduleHolidayName, sameClockDaysBefore, scheduleComparison } from './brief-schedule.js';
 
 export { BRIEF_HUBS };
 // The wall-clock helper lives with the schedule comparison, which needs it too.
@@ -574,6 +574,9 @@ function hubsReporting(n, day) {
  * @property {boolean} [yesterday]  a hub's on-time fact read from yesterday's board
  * @property {boolean} [lighterSchedule]  air.normal says the schedule is lighter than usual today
  * @property {boolean} [inLineWithSchedule]  ... and that the count in the air is in line with it (calm)
+ * @property {boolean} [lightScheduleDay]  air.normal says United schedules far fewer flights for the
+ *   holiday: a light-schedule date or the morning after one, with the schedule read but not usable
+ *   (lightScheduleDayOrMorningAfter). Its floor is calm then.
  */
 
 /**
@@ -1147,6 +1150,12 @@ export function buildBriefFacts(sources, { nowMs }) {
       // a tone. Every other lighter schedule gets the neutral sentence, at any tone.
       const inLine = lighter !== null && -pct - lighter <= BRIEF_AIRBORNE_USUAL_BAND_PCT && shortfall === 'calm';
       const scheduleSentence = lighter === null ? '' : ` ${inLine ? 'That is in line with a lighter schedule today' : 'The schedule is lighter today too'}: about ${lighter}% fewer departures were scheduled from United's hubs over the past ${numberWord(hours)} hours than usual.`;
+      // On the holiday fallback the fact says which day it is, so the count is not read as a halt (Nov
+      // 26 2026: "67% fewer than usual" alone was published as "Far fewer United flights are in the
+      // air than usual right now."). The day by name, never "today" or "this morning": the label rolls
+      // over on Central time, and the sentence must be true in every US time zone.
+      const holidayName = holiday ? lightScheduleHolidayName(nowMs) : null;
+      const holidaySentence = holidayName ? ` United schedules far fewer flights than usual for ${holidayName}.` : '';
       if (schedule) {
         const rawRatio = schedule.today !== null && schedule.usual ? Math.round((schedule.today / schedule.usual) * 1000) / 1000 : null;
         airScheduleAudit = {
@@ -1159,10 +1168,12 @@ export function buildBriefFacts(sources, { nowMs }) {
       facts.push({
         id: 'air.normal',
         kind: 'airborne',
-        statement: `The ${airborne} United flights in the air are ${comparison} for this time of day: over the past ${days} days, the median at this hour was ${median}.${scheduleSentence}`,
+        statement: `The ${airborne} United flights in the air are ${comparison} for this time of day: over the past ${days} days, the median at this hour was ${median}.${scheduleSentence}${holidaySentence}`,
         values: uniq([
           String(median), String(days), numberWord(days), usual ? null : `${Math.abs(pct)}%`, String(airborne),
           ...(lighter === null ? [] : [`${lighter}%`, String(hours), numberWord(hours), 'lighter schedule']),
+          // The day's names, and the schedule as the reason, which the sentence states.
+          ...(holidayName ? [holidayName, holidayName.replace(/ (?:Day|Eve)$/, ''), 'lighter schedule'] : []),
         ]),
         at: iso(atMs),
         link: { tab: 'live' },
@@ -1173,10 +1184,11 @@ export function buildBriefFacts(sources, { nowMs }) {
         // While the shortfall sets the tone the brief quotes its figure first, so the key moves every
         // ten points and a brief saying "73% fewer" is rewritten before the count is far from it.
         // The lighter-schedule sentence appearing, going or changing wording is a change too: "in
-        // line" says why it is calm.
-        material: `airnorm:${usual ? 'usual' : pct < 0 ? 'below' : 'above'}${inLine ? ':inline' : lighter === null ? '' : ':lighter'}${shortfall === 'calm' ? '' : `:${shortfall}:${Math.floor(Math.abs(pct) / 10) * 10}`}`,
+        // line" says why it is calm. So is the holiday sentence.
+        material: `airnorm:${usual ? 'usual' : pct < 0 ? 'below' : 'above'}${inLine ? ':inline' : lighter === null ? '' : ':lighter'}${holidayName ? ':holiday' : ''}${shortfall === 'calm' ? '' : `:${shortfall}:${Math.floor(Math.abs(pct) / 10) * 10}`}`,
         ...(lighter === null ? {} : { lighterSchedule: true }),
         ...(inLine ? { inLineWithSchedule: true } : {}),
+        ...(holidayName ? { lightScheduleDay: true } : {}),
       });
     }
   }
