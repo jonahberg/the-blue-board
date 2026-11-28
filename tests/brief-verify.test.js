@@ -789,9 +789,9 @@ describe('verifyBrief: a lighter schedule', () => {
   });
 
   it('at watch with a lighter schedule, "Far fewer" overstates it: the headline is replaced', () => {
-    // 48% fewer than usual on a day 30% lighter: 35% short of the expected count, a watch.
+    // 55% fewer than usual on a day 30% lighter: 36% short of the expected count, a watch.
     const stop = JSON.parse(readFileSync(new URL('./fixtures/brief/nationwide-stop-2026-11-13.json', import.meta.url), 'utf8'));
-    const watchFacts = buildBriefFacts({ ...stop.sources, air: { airborne: 338, starlink: null }, airSchedule: { today: 490, prior: Array(7).fill(700) } }, { nowMs: Date.parse(stop.nowIso) }).facts;
+    const watchFacts = buildBriefFacts({ ...stop.sources, air: { airborne: 290, starlink: null }, airSchedule: { today: 490, prior: Array(7).fill(700) } }, { nowMs: Date.parse(stop.nowIso) }).facts;
     const f = watchFacts.find((x) => x.id === 'air.normal');
     expect(f).toMatchObject({ toneFloor: 'watch', lighterSchedule: true });
     const headline = 'Far fewer United flights are in the air than usual right now.';

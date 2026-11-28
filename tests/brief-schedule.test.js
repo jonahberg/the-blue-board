@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  BRIEF_SCHEDULE_DAYS, BRIEF_SCHEDULE_FLOOR_SHARE, BRIEF_SCHEDULE_MIN_DAYS, BRIEF_SCHEDULE_MIN_USUAL,
+  BRIEF_SCHEDULE_BAND_FULL_RATIO, BRIEF_SCHEDULE_BAND_NONE_RATIO, BRIEF_SCHEDULE_DAYS, BRIEF_SCHEDULE_FLOOR_SHARE, BRIEF_SCHEDULE_MIN_DAYS, BRIEF_SCHEDULE_MIN_USUAL,
   BRIEF_SCHEDULE_USUAL_BAND_PCT, BRIEF_SCHEDULE_WINDOW_MIN, centralDate, lighterSchedulePct, lightScheduleDayOrMorningAfter, lightScheduleHoliday,
   sameClockDaysBefore, scheduleComparison, scheduleWindows, thanksgivingDate,
 } from '../src/lib/brief-schedule.js';
@@ -46,15 +46,35 @@ describe('scheduleWindows', () => {
 });
 
 describe('scheduleComparison', () => {
-  it('the factor is min(1, ratio + 0.10): only a schedule lighter than the ordinary spread counts', () => {
+  it('the factor is min(1, ratio + band × taper): the full 10 points from 0.90, none at 0.70 or below', () => {
+    expect([BRIEF_SCHEDULE_BAND_FULL_RATIO, BRIEF_SCHEDULE_BAND_NONE_RATIO]).toEqual([0.9, 0.7]);
     expect(scheduleComparison({ today: 490, prior: week(700) })).toEqual({
-      status: 'ok', windowMin: 240, today: 490, usual: 700, days: 7, ratio: 0.7, factor: 0.8,
+      status: 'ok', windowMin: 240, today: 490, usual: 700, days: 7, ratio: 0.7, factor: 0.7,
     });
     // A Saturday 7% lighter than the weekday-heavy median is inside the band: factor 1.
     expect(scheduleComparison({ today: 651, prior: week(700) }).factor).toBe(1);
     expect(scheduleComparison({ today: 630, prior: week(700) }).factor).toBe(1); // exactly 0.90
     // A heavier schedule never raises the usual.
     expect(scheduleComparison({ today: 900, prior: week(700) })).toMatchObject({ ratio: 1.286, factor: 1 });
+  });
+
+  it('the taper, ratio by ratio (Thanksgiving 2026 read 0.536 at 3:10 PM PT)', () => {
+    const factor = (ratio) => scheduleComparison({ today: Math.round(ratio * 1000), prior: week(1000) }).factor;
+    expect([0.536, 0.704, 0.8, 0.9, 0.92, 1.04].map(factor)).toEqual([0.536, 0.706, 0.85, 1, 1, 1]);
+  });
+
+  it('the factor is continuous and never falls as the schedule fills', () => {
+    let last = null;
+    for (let today = 400; today <= 1100; today++) {
+      const c = scheduleComparison({ today, prior: week(1000) });
+      expect(c.status).toBe('ok');
+      if (last !== null) {
+        expect(c.factor).toBeGreaterThanOrEqual(last);
+        // 1.5 points a point of ratio at most (the taper's slope), plus rounding to three places.
+        expect(c.factor - last).toBeLessThanOrEqual(0.002 + 1e-9);
+      }
+      last = c.factor;
+    }
   });
 
   it('the usual is the median of the earlier days that have rows; a day with none is no data', () => {
@@ -73,7 +93,7 @@ describe('scheduleComparison', () => {
     expect(scheduleComparison({ today: 150, prior: week(150) }).status).toBe('ok');
     // Under 40% of usual is missing rows, not a schedule: believing it would hide a halt.
     expect(scheduleComparison({ today: 279, prior: week(700) })).toMatchObject({ status: 'unavailable', reason: 'today_too_thin', today: 279 });
-    expect(scheduleComparison({ today: 280, prior: week(700) })).toMatchObject({ status: 'ok', factor: 0.5 });
+    expect(scheduleComparison({ today: 280, prior: week(700) })).toMatchObject({ status: 'ok', factor: 0.4 });
   });
 
   it('lighterSchedulePct: how much lighter, only when it moves the usual', () => {

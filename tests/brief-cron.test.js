@@ -296,7 +296,7 @@ describe('honest degradation', () => {
     await runBriefCron({ nowMs: NOW, collect: collected(fixture('light-schedule-calm')), generate: modelFail('model_timeout') });
     const [row] = briefRows();
     expect(row.tone).toBe('calm');
-    expect(row.collection.airSchedule).toMatchObject({ status: 'ok', today: 490, usual: 705, ratio: 0.695, factor: 0.795, expectedAirborne: 510 });
+    expect(row.collection.airSchedule).toMatchObject({ status: 'ok', today: 490, usual: 705, ratio: 0.695, factor: 0.695, expectedAirborne: 445 });
     // A failed read is stored as "unavailable" with its reason, and named in errors.
     useDb();
     await runBriefCron({

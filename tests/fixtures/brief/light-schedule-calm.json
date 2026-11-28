@@ -1,6 +1,6 @@
 {
  "name": "light-schedule-calm",
- "description": "Synthetic, from calm-afternoon (Tue Nov 10 2026, 1:40 PM PT): the same payloads with the count of a day United scheduled far fewer flights. 405 United flights in the air against a 7-day median of 641 is 37% fewer than usual, which read \"watch\" before v1.31.3. The schedule counts (flight_history, the four hours to now and the same clock time on the previous seven days) say 490 hub departures were scheduled against a usual 705, about 30% fewer, so the usual is scaled by min(1, 0.695 + 0.10) = 0.795 to 510 and the count is 21% short of that. Expected tone: calm, with the lighter schedule stated in the fact.",
+ "description": "Synthetic, from calm-afternoon (Tue Nov 10 2026, 1:40 PM PT): the same payloads with the count of a day United scheduled far fewer flights. 405 United flights in the air against a 7-day median of 641 is 37% fewer than usual, which read \"watch\" before v1.31.3. The schedule counts (flight_history, the four hours to now and the same clock time on the previous seven days) say 490 hub departures were scheduled against a usual 705, about 30% fewer, so the usual is scaled by 0.695 (a ratio under 0.70 takes none of the 10-point band, v1.34.1; it was min(1, 0.695 + 0.10) = 0.795 before) to 445 and the count is 9% short of that. Expected tone: calm, with the lighter schedule stated in the fact.",
  "nowIso": "2026-11-10T21:40:00Z",
  "sources": {
   "irops": {

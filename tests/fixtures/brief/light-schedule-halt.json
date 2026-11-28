@@ -1,6 +1,6 @@
 {
  "name": "light-schedule-halt",
- "description": "Synthetic, from nationwide-stop-2026-11-13 (the real payloads at 2:27 PM PT, 174 United flights in the air against a usual 651): the same halt on a day with a light schedule. 480 hub departures were scheduled in the four hours to now against a usual 702, about 32% fewer, so the usual is scaled by min(1, 0.684 + 0.10) = 0.784 to 510, and 174 is still 66% short of it. A held or canceled flight keeps its scheduled departure, so a halt does not lower the schedule count. Expected tone: disrupted, led by the shortfall.",
+ "description": "Synthetic, from nationwide-stop-2026-11-13 (the real payloads at 2:27 PM PT, 174 United flights in the air against a usual 651): the same halt on a day with a light schedule. 480 hub departures were scheduled in the four hours to now against a usual 702, about 32% fewer, so the usual is scaled by 0.684 (a ratio under 0.70 takes none of the 10-point band, v1.34.1; it was min(1, 0.684 + 0.10) = 0.784 before) to 445, and 174 is still 61% short of it. A held or canceled flight keeps its scheduled departure, so a halt does not lower the schedule count. Expected tone: disrupted, led by the shortfall.",
  "nowIso": "2026-11-13T22:27:31Z",
  "sources": {
   "irops": {

@@ -143,9 +143,12 @@ export const BRIEF_AIRBORNE_USUAL_BAND_PCT = 10;
  * afternoon of the stop the lines were crossed at 1:20 PM PT (43%) and 1:30 PM PT (48%).
  *
  * Since v1.31.3 the line is measured against what the day's schedule leads one to expect: the usual
- * × min(1, scheduled ratio + 0.10) (src/lib/brief-schedule.js), so a light holiday schedule is not
- * a shortfall. The largest ordinary shortfall since, Tue Nov 17 2026 near 10:30 PM PT, read 31%
- * against the usual and 28% against the expected count.
+ * × the schedule's factor (src/lib/brief-schedule.js scheduleComparison), so a light holiday
+ * schedule is not a shortfall. The factor is min(1, scheduled ratio + 0.10) from a ratio of 0.90,
+ * the ratio itself at 0.70 and below, and in between the 0.10 shrinks in a straight line (v1.34.1:
+ * the flat 0.10 read "watch" on Thanksgiving afternoon 2026). The largest ordinary shortfall since
+ * v1.31.3, Tue Nov 17 2026 near 10:30 PM PT, read 31% against the usual and 28% against the
+ * expected count.
  */
 export const BRIEF_AIRBORNE_WATCH_PCT = 35;
 /** ... and at this many percent fewer it is "disrupted" and leads the brief, above any one airport's program. */
@@ -1120,8 +1123,9 @@ export function buildBriefFacts(sources, { nowMs }) {
       const usual = Math.abs(pct) <= BRIEF_AIRBORNE_USUAL_BAND_PCT;
       const comparison = usual ? 'about the usual number' : `${Math.abs(pct)}% ${pct < 0 ? 'fewer' : 'more'} than usual`;
       // The day's schedule (src/lib/brief-schedule.js), only when the count is well below the usual.
-      // The usual is scaled by min(1, scheduled ratio + 0.10): only a schedule lighter than the
-      // ordinary spread moves it, a heavier one never does, and an unread or untrusted one is 1.
+      // The usual is scaled by the schedule's factor, min(1, ratio + 0.10 tapered to nothing between a
+      // ratio of 0.90 and 0.70): only a schedule lighter than the ordinary spread moves it, a heavier
+      // one never does, and an unread or untrusted one is 1.
       const schedule = scheduleReadNeeded(airborne, median) ? scheduleComparison(sources?.airSchedule) : null;
       const factor = schedule?.status === 'ok' ? schedule.factor : 1;
       const expected = Math.round(median * factor);

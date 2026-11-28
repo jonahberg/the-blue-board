@@ -82,7 +82,7 @@ zone (`"9:00 PM ET"`), airport codes and every name that stands for them (`"ORD"
 | `wx.summary` | weather | same | Weather is not affecting operations at any of the 9 United hubs with a current report. | calm |
 | `air.total` | airborne | live feed, `isOnGround()` complement (the Live stat bar) | 630 United flights, including United Express, are in the air right now. | calm |
 | `air.starlink` | airborne | live feed × Starlink roster × fleet match (`makeIsStarlinkFlight`'s rule) | 280 of the 630 United flights in the air have Starlink Wi-Fi. | calm |
-| `air.normal` | airborne | `airborne_samples`, median of the same clock time on the previous 7 days (≥ 3 days needed); at 25% or more fewer, also the day's schedule (`flight_history`, `src/lib/brief-schedule.js`) | The 702 United flights in the air are 11% fewer than usual for this time of day: … the median at this hour was 790. On a light-schedule day: … That is in line with a lighter schedule today: about 30% fewer departures were scheduled from United's hubs over the past four hours than usual. | calm; **watch at 35% fewer than expected, disrupted at 45% fewer** when the expected count is 100 or more (v1.31.1; expected = the usual × min(1, scheduled ratio + 0.10) since v1.31.3) |
+| `air.normal` | airborne | `airborne_samples`, median of the same clock time on the previous 7 days (≥ 3 days needed); at 25% or more fewer, also the day's schedule (`flight_history`, `src/lib/brief-schedule.js`) | The 702 United flights in the air are 11% fewer than usual for this time of day: … the median at this hour was 790. On a light-schedule day: … That is in line with a lighter schedule today: about 30% fewer departures were scheduled from United's hubs over the past four hours than usual. | calm; **watch at 35% fewer than expected, disrupted at 45% fewer** when the expected count is 100 or more (v1.31.1; expected = the usual × the schedule's factor since v1.31.3: min(1, scheduled ratio + 0.10), the 0.10 tapering to nothing between a ratio of 0.90 and 0.70 since v1.34.1) |
 | `flow.<HUB>.arrivals` / `.departures` | flow | Enhanced Radar `operations.flow` (from FAA data); [radio](#air-traffic-control-radio-enhanced-radar), off by default | Enhanced Radar, from FAA data, reports Newark (EWR) arrivals: a planned rate of 36 an hour, 26 landed in the last hour and 39 scheduled in the next hour, more than the planned rate allows. | calm |
 | `flow.<HUB>.runways` | flow | Enhanced Radar `operations.runways` | Enhanced Radar reports Newark (EWR) landing on runway 22L and taking off from runway 22R. | calm |
 | `radio.<HUB>.<id>` | radio | each Enhanced Radar `critical` / `notable` observation under 2 h old (max 3 per hub): time, the API's tags and runways as values; the **sanitized** title as `quote` only | Heard on Newark (EWR) air traffic control frequencies at 5:29 PM ET, in Enhanced Radar's model-written summary, which can contain mistakes: "GLS approach out of service". | calm (never sets the tone) |
@@ -248,8 +248,11 @@ so "what a fact allows" and "what a sentence claims" are measured with one ruler
    the day's schedule, the hub departures scheduled over the last four hours against the median of
    the same count at the same wall-clock time on the previous 7 days (`flight_history`,
    `on_dep_board`, canceled flights included: a halt leaves the count alone). The shortfall that sets
-   the tone is measured against the usual × min(1, ratio + 0.10): only the part of a lighter schedule
-   beyond the 10-point "about the usual" band counts, and a heavier schedule never raises the bar.
+   the tone is measured against the usual × min(1, ratio + 0.10 × t), t = (ratio − 0.70) / 0.20
+   held between 0 and 1: from 0.90 only the part of a lighter schedule beyond the 10-point "about
+   the usual" band counts, at 0.70 and below the usual is scaled by the ratio itself, and in between
+   the band shrinks in a straight line (v1.34.1: the flat band read "watch" on Thanksgiving afternoon
+   2026, a schedule half the usual). A heavier schedule never raises the bar.
    The thresholds are unchanged. The ratio is not used (the comparison is as before) when the read
    fails or times out, fewer than 3 earlier days have rows, the usual four-hour count is under 150
    (about 11:30 PM to 5:15 AM PT), or today's count is under 40% of the usual (missing rows, which

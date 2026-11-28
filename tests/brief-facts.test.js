@@ -6,12 +6,13 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import {
-  BRIEF_AIRBORNE_DISRUPTED_PCT, BRIEF_AIRBORNE_MIN_USUAL, BRIEF_AIRBORNE_NOTABLE_PCT, BRIEF_AIRBORNE_WATCH_PCT, scheduleReadNeeded,
+  BRIEF_AIRBORNE_DISRUPTED_PCT, BRIEF_AIRBORNE_MIN_USUAL, BRIEF_AIRBORNE_NOTABLE_PCT, BRIEF_AIRBORNE_USUAL_BAND_PCT, BRIEF_AIRBORNE_WATCH_PCT, scheduleReadNeeded,
   BRIEF_HUBS, airborneNormal, airborneShortfallTone, airportDayWord, buildBriefFacts, isAirborneShortfallFact, sameClockDaysBefore, computeTone, countAirborneAndStarlink, impairedHubs,
   faaCausePhrase, formatAirportClock, isNonHubProgramFact, isWholeAirportClosure, materialKey, maxTone,
   parseIsoMs, planDateMs, publicFact, resolvePlanHhmm, resolveZuluHhmm, travelerNoteAllowed,
 } from '../src/lib/brief-facts.js';
 import { BRIEF_SYSTEM_PROMPT, buildBriefUserMessage } from '../src/lib/brief-prompt.js';
+import { lighterSchedulePct, scheduleComparison } from '../src/lib/brief-schedule.js';
 import { buildFaaIndex } from '../src/lib/faa-context.js';
 import { networkStatus, withoutRoutineClosures } from '../src/lib/ops-health.js';
 
@@ -912,17 +913,18 @@ describe('Nov 18 2026: a lighter schedule is not a shortfall', () => {
     expect(computeTone(out.facts)).toBe('calm');
     expect(isAirborneShortfallFact(f)).toBe(false);
     // The audit the cron stores in ops_briefs.collection.
+    // A ratio under 0.70 takes none of the 10-point band (v1.34.1): the factor is the ratio.
     expect(out.collection.airSchedule).toEqual({
-      status: 'ok', windowMin: 240, today: 490, usual: 705, days: 7, ratio: 0.695, factor: 0.795,
-      airborne: 405, usualAirborne: 641, expectedAirborne: 510, vsExpectedPct: -21,
+      status: 'ok', windowMin: 240, today: 490, usual: 705, days: 7, ratio: 0.695, factor: 0.695,
+      airborne: 405, usualAirborne: 641, expectedAirborne: 445, vsExpectedPct: -9,
     });
     // Without the schedule (the same count before v1.31.3) it read "watch".
     expect(normal(build(fixture('calm-afternoon'), { air: { airborne: 405, starlink: null } })).toneFloor).toBe('watch');
   });
 
-  it('a day 30% lighter with flights tracking the schedule reads about 12% short', () => {
+  it('a day 30% lighter with flights tracking the schedule reads as the schedule (v1.34.1: was 12% short)', () => {
     const out = air(490, 700, { today: 490, prior: week(700) });
-    expect(out.collection.airSchedule).toMatchObject({ ratio: 0.7, factor: 0.8, expectedAirborne: 560, vsExpectedPct: -12 });
+    expect(out.collection.airSchedule).toMatchObject({ ratio: 0.7, factor: 0.7, expectedAirborne: 490, vsExpectedPct: 0 });
     expect(normal(out)).toMatchObject({ toneFloor: 'calm', material: 'airnorm:below:inline', inLineWithSchedule: true });
     expect(normal(out).statement).toMatch(/30% fewer than usual for this time of day.*in line with a lighter schedule today: about 30% fewer departures/);
   });
@@ -930,7 +932,7 @@ describe('Nov 18 2026: a lighter schedule is not a shortfall', () => {
   it('"in line with" only when the schedule accounts for the shortfall, within 10 points', () => {
     const IN_LINE = 'That is in line with a lighter schedule today';
     const NEUTRAL = 'The schedule is lighter today too: about';
-    // 34% fewer flying on a schedule 12% lighter: calm (33% short of expected), but not "in line".
+    // 34% fewer flying on a schedule 12% lighter: calm (32% short of expected), but not "in line".
     const notInLine = normal(air(462, 700, { today: 616, prior: week(700) }));
     expect(notInLine).toMatchObject({ toneFloor: 'calm', lighterSchedule: true, material: 'airnorm:below:lighter' });
     expect(notInLine.inLineWithSchedule).toBeUndefined();
@@ -941,12 +943,27 @@ describe('Nov 18 2026: a lighter schedule is not a shortfall', () => {
     const past = normal(air(413, 700, { today: 490, prior: week(700) }));
     expect(past).toMatchObject({ toneFloor: 'calm', material: 'airnorm:below:lighter' });
     expect(past.statement).toContain(NEUTRAL);
-    // Never on a fact that sets a tone: 65% fewer on a schedule 55% lighter is within 10 points but
-    // 36% short of the expected count, a watch, so the sentence is the neutral one.
+    // Never on a fact that sets a tone. Under the flat band, 65% fewer on a schedule 55% lighter was
+    // within 10 points yet 36% short of the expected count, a watch. Under the taper (v1.34.1) the
+    // expected count is the schedule's own below 0.70, so the same count is 22% short, calm and in
+    // line, and no count within 10 points of the schedule reaches the watch line at all (the sweep);
+    // the calm condition on "in line" stays as a guard.
     const deep = normal(air(245, 700, { today: 315, prior: week(700) }));
-    expect(deep).toMatchObject({ toneFloor: 'watch', lighterSchedule: true });
-    expect(deep.inLineWithSchedule).toBeUndefined();
-    expect(deep.statement).not.toContain(IN_LINE);
+    expect(deep).toMatchObject({ toneFloor: 'calm', lighterSchedule: true, inLineWithSchedule: true });
+    const reachable = [];
+    for (const usualAir of [651, 700]) {
+      for (let today = 280; today <= 700; today++) {
+        const c = scheduleComparison({ today, prior: week(700) });
+        const lighter = lighterSchedulePct(c);
+        if (lighter === null) continue;
+        for (let airborne = 100; airborne <= usualAir; airborne++) {
+          const pct = Math.round(((airborne - usualAir) / usualAir) * 100);
+          if (-pct - lighter > BRIEF_AIRBORNE_USUAL_BAND_PCT) continue;
+          if (airborneShortfallTone(airborne, Math.round(usualAir * c.factor)) !== 'calm') reachable.push([usualAir, today, airborne]);
+        }
+      }
+    }
+    expect(reachable).toEqual([]);
   });
 
   it('a halt on a light-schedule day still reads disrupted, and does not call the schedule the reason', () => {
@@ -955,7 +972,7 @@ describe('Nov 18 2026: a lighter schedule is not a shortfall', () => {
     expect(f).toMatchObject({ toneFloor: 'disrupted', severity: 110, material: 'airnorm:below:lighter:disrupted:70' });
     expect(f.statement).toMatch(/73% fewer than usual.*The schedule is lighter today too: about 32% fewer departures were scheduled/);
     expect(f.statement).not.toMatch(/in line with/);
-    expect(out.collection.airSchedule).toMatchObject({ status: 'ok', factor: 0.784, expectedAirborne: 510, vsExpectedPct: -66 });
+    expect(out.collection.airSchedule).toMatchObject({ status: 'ok', factor: 0.684, expectedAirborne: 445, vsExpectedPct: -61 });
     expect(computeTone(out.facts)).toBe('disrupted');
   });
 
@@ -1025,5 +1042,44 @@ describe('Nov 18 2026: a lighter schedule is not a shortfall', () => {
       const light = air(404, 651, { today: 480, prior: week(700) }, THANKSGIVING);
       expect(normal(light)).toMatchObject({ toneFloor: 'calm', lighterSchedule: true, inLineWithSchedule: true });
     });
+  });
+});
+
+// Nov 26 2026, Thanksgiving: a flat 10-point band on a schedule half the usual raised the expected
+// count by about 19% and read "watch" from 3:10 to 4:30 PM PT. The band now tapers to nothing at a
+// ratio of 0.70 (src/lib/brief-schedule.js). The backtest only shows that it leaves the Nov 13 stop
+// alone (no sample of the stop had a ratio under 0.90); that a halt on a light day still trips is
+// shown here, on synthetic counts.
+describe('Nov 27 2026: the taper does not blunt a halt on a light day', () => {
+  const stop = fixture('nationwide-stop-2026-11-13');
+  const week = (n) => Array.from({ length: 7 }, () => n);
+  const THANKSGIVING_AFTERNOON = '2026-11-26T22:00:00Z'; // 2 PM PT
+  const normalAt = (airborne, airSchedule) => {
+    const out = buildBriefFacts({ ...stop.sources, air: { airborne, starlink: null }, airNormal: { median: 680, days: 7 }, airSchedule }, { nowMs: Date.parse(THANKSGIVING_AFTERNOON) });
+    return { fact: byId(out.facts)['air.normal'], audit: out.collection.airSchedule, tone: computeTone(out.facts) };
+  };
+  // A readable schedule 45% light (363 of 660, ratio 0.55): the factor is the ratio, 374 expected.
+  const LIGHT = { today: 363, prior: week(660) };
+
+  it('150 in the air against 680 usual on that schedule is disrupted, and leads', () => {
+    const { fact, audit, tone } = normalAt(150, LIGHT);
+    expect(audit).toMatchObject({ status: 'ok', ratio: 0.55, factor: 0.55, expectedAirborne: 374, vsExpectedPct: -60 });
+    expect(audit.holiday).toBeUndefined();
+    expect(fact).toMatchObject({ toneFloor: 'disrupted', severity: 110, lighterSchedule: true });
+    expect(fact.lightScheduleDay).toBeUndefined();
+    expect(isAirborneShortfallFact(fact)).toBe(true);
+    expect(tone).toBe('disrupted');
+  });
+
+  it('230 in the air on the same schedule is a watch', () => {
+    const { fact, audit } = normalAt(230, LIGHT);
+    expect(audit).toMatchObject({ factor: 0.55, expectedAirborne: 374, vsExpectedPct: -39 });
+    expect(fact).toMatchObject({ toneFloor: 'watch', severity: 50, lighterSchedule: true });
+  });
+
+  it('flights tracking that schedule are calm', () => {
+    const { fact, audit } = normalAt(340, LIGHT);
+    expect(audit).toMatchObject({ factor: 0.55, vsExpectedPct: -9 });
+    expect(fact).toMatchObject({ toneFloor: 'calm', inLineWithSchedule: true });
   });
 });

@@ -14,6 +14,11 @@
 // ratio had a median of 1.00, 5th percentile 0.89, 95th 1.04 and a minimum of 0.65 (a light
 // Tuesday night). Through the Nov 13 ground stop it stayed at 1.00 or above, so the stop reads
 // exactly as before.
+//
+// The taper (v1.34.1, the same script, Nov 13 to Nov 27 2026): Thanksgiving's readable afternoon
+// went from 11 "watch" samples to none, and no other group's watch or disrupted count moved. No sample
+// of Nov 13 or 14 had a ratio under 0.90 while 25% or more short, so the backtest shows only that
+// the taper leaves the stop alone; that a halt on a light day still trips is a synthetic test.
 
 /** The trailing window of scheduled departures, in minutes. */
 export const BRIEF_SCHEDULE_WINDOW_MIN = 240;
@@ -38,8 +43,22 @@ export const BRIEF_SCHEDULE_FLOOR_SHARE = 0.4;
  * lines were set on raw counts that already carry that spread. Without it the Saturday after the
  * Nov 13 stop (a schedule 6 to 8% lighter than the weekday-heavy median) read "watch" on 10 of 25
  * samples between 5 and 7 AM PT instead of "disrupted"; with it, all 25 stay "disrupted".
+ * Since v1.34.1 the band tapers (BRIEF_SCHEDULE_BAND_FULL_RATIO, BRIEF_SCHEDULE_BAND_NONE_RATIO).
  */
 export const BRIEF_SCHEDULE_USUAL_BAND_PCT = 10;
+/**
+ * At this ratio and above the whole band applies, exactly as before v1.34.1: the ordinary
+ * day-to-day spread (5th percentile 0.89) and the Saturday after the Nov 13 stop (0.92 to 0.94).
+ */
+export const BRIEF_SCHEDULE_BAND_FULL_RATIO = 0.9;
+/**
+ * At this ratio and below none of the band applies: the usual is scaled by the ratio itself. Between
+ * the two the band shrinks in a straight line. A flat 10 points was meant for an ordinary spread;
+ * on a schedule half the usual it raised the expected count by about 19%. Thanksgiving Day 2026 at
+ * 3:10 PM PT: 281 in the air against a usual 680 on a schedule of 354 against 660 (ratio 0.536). The
+ * flat band expected 432 and read 35% short, "watch"; with none it expects 364, 23% short.
+ */
+export const BRIEF_SCHEDULE_BAND_NONE_RATIO = 0.7;
 
 /** How far `tz`'s wall clock is ahead of UTC at `ms`, in milliseconds (negative in the Americas). */
 function tzOffsetMs(ms, tz) {
@@ -102,7 +121,9 @@ const round3 = (x) => Math.round(x * 1000) / 1000;
 
 /**
  * Today's scheduled departures against the usual, and the factor the usual airborne count is
- * scaled by: min(1, ratio + 0.10). Capped at 1, so a heavier schedule never raises the bar.
+ * scaled by: min(1, ratio + 0.10 × t), where t = (ratio − 0.70) / (0.90 − 0.70) held between 0 and
+ * 1 (BRIEF_SCHEDULE_BAND_NONE_RATIO, BRIEF_SCHEDULE_BAND_FULL_RATIO). From 0.90 that is the whole
+ * 10-point band, at 0.70 and below none of it. Capped at 1, so a heavier schedule never raises the bar.
  * Unavailable (the comparison is unscaled, exactly as before) when the read failed, fewer than
  * BRIEF_SCHEDULE_MIN_DAYS earlier days have rows, the usual is under BRIEF_SCHEDULE_MIN_USUAL, or
  * today is under BRIEF_SCHEDULE_FLOOR_SHARE of the usual. An earlier day with no rows is no data,
@@ -122,7 +143,8 @@ export function scheduleComparison(counts) {
   if (usual < BRIEF_SCHEDULE_MIN_USUAL) return unavailable('usual_too_small');
   if (today < BRIEF_SCHEDULE_FLOOR_SHARE * usual) return unavailable('today_too_thin');
   const ratio = today / usual;
-  const factor = Math.min(1, ratio + BRIEF_SCHEDULE_USUAL_BAND_PCT / 100);
+  const taper = Math.min(1, Math.max(0, (ratio - BRIEF_SCHEDULE_BAND_NONE_RATIO) / (BRIEF_SCHEDULE_BAND_FULL_RATIO - BRIEF_SCHEDULE_BAND_NONE_RATIO)));
+  const factor = Math.min(1, ratio + (BRIEF_SCHEDULE_USUAL_BAND_PCT / 100) * taper);
   return { status: 'ok', windowMin, today, usual, days: prior.length, ratio: round3(ratio), factor: round3(factor) };
 }
 
