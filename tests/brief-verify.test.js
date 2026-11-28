@@ -929,6 +929,20 @@ describe('verifyBrief: "Far fewer" only beside a disrupted shortfall; no "fewer 
     expect(plain.brief.headline).toBe(FEWER);
   });
 
+  it('the Haiku samples (v1.34.1 prompt): the holiday evening and the morning after never headline fewer flights; the halt leads with it', () => {
+    const sample = (name) => briefFromSavedResponse(readFileSync(new URL(`./fixtures/brief-samples/${name}.1.json`, import.meta.url), 'utf8'), factsOf(fixtureOf(name)));
+    for (const [name, tone] of [['thanksgiving-2026-evening-capped', 'calm'], ['thanksgiving-2026-evening-one-hub-watch', 'watch'], ['thanksgiving-2026-morning-after', 'calm']]) {
+      const out = sample(name);
+      expect(out.source, name).toBe('model');
+      expect(out.brief.tone, name).toBe(tone);
+      expect(out.brief.headline, name).not.toMatch(/fewer/i);
+      expect(out.brief.items.find((i) => i.fact_ids.includes('air.normal'))?.text, name).toMatch(/Thanksgiving/);
+    }
+    const halt = sample('thanksgiving-2026-halt-light-schedule');
+    expect(halt.brief).toMatchObject({ tone: 'disrupted', headline: FAR });
+    expect(halt.brief.items[0].fact_ids).toEqual(['air.normal']);
+  });
+
   it('(e) a disrupted shortfall still leads with "Far fewer…": the Nov 13 stop, and a halt on a light day', () => {
     for (const name of ['nationwide-stop-2026-11-13', 'thanksgiving-2026-halt-light-schedule']) {
       const facts = factsOf(fixtureOf(name));
