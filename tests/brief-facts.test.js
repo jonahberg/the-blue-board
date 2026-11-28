@@ -873,6 +873,8 @@ describe('Nov 13 2026: far fewer flights in the air than usual sets the tone', (
     expect(BRIEF_SYSTEM_PROMPT).toMatch(/far fewer United flights are in the air than usual \(id "air\.normal", 35% or more fewer\), that is the lead/);
     expect(BRIEF_SYSTEM_PROMPT).toMatch(/give no reason for the shortfall other than a lighter schedule the fact itself states/);
     expect(BRIEF_SYSTEM_PROMPT).toMatch(/in line with a lighter schedule today, it is not a problem and never the lead or the headline/);
+    // Nov 26 2026: on Thanksgiving the model wrote "Far fewer…" on a count the holiday explained.
+    expect(BRIEF_SYSTEM_PROMPT).toContain('Write "Far fewer" only when that count is itself the day\'s alarm; a count the fact explains by a lighter schedule or a holiday is not the headline.');
   });
 });
 
